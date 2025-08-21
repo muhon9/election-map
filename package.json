@@ -2,6 +2,7 @@
   "name": "electioncampaign",
   "version": "0.1.0",
   "private": true,
+
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,14 +10,19 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.7",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.1",
+    "mongoose": "^8.17.1",
+    "next": "14.2.31",
+    "next-auth": "^4.24.11",
     "react": "^18",
-    "react-dom": "^18",
-    "next": "14.2.31"
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
     "eslint": "^8",
-    "eslint-config-next": "14.2.31"
+    "eslint-config-next": "14.2.31",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1"
   }
 }
