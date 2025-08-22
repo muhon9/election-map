@@ -13,22 +13,46 @@ export default function LoginPage() {
     e.preventDefault();
     setErr("");
     const res = await signIn("credentials", { username, password, redirect: false });
-    console.log("res", res.error)
     if (res?.error) setErr("Invalid credentials");
     else router.push("/");
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-gray-50">
-      <form onSubmit={onSubmit} className="w-full max-w-sm bg-white p-6 rounded shadow">
-        <h1 className="text-xl font-semibold mb-4">Sign in</h1>
-        <input className="border w-full mb-3 px-3 py-2 rounded" placeholder="Username"
-               value={username} onChange={e=>setUsername(e.target.value)} />
-        <input className="border w-full mb-3 px-3 py-2 rounded" placeholder="Password" type="password"
-               value={password} onChange={e=>setPassword(e.target.value)} />
-        {err && <p className="text-red-600 text-sm mb-2">{err}</p>}
-        <button className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Sign in</button>
-      </form>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="w-full max-w-md bg-white shadow-lg rounded-lg p-8">
+        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
+          Login to Dashboard
+        </h1>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Username</label>
+            <input
+              type="text"
+              className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter username"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Password</label>
+            <input
+              type="password"
+              className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+            />
+          </div>
+          {err && <p className="text-red-600 text-sm">{err}</p>}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          >
+            Sign In
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

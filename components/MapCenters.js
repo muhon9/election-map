@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import CenterAreasPanel from "./CenterAreasPanel";
 
 const containerStyle = { width: "100%", height: "420px" };
 
@@ -11,7 +12,11 @@ const MINIMAL_MAP_STYLE = [
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
   { featureType: "landscape.man_made", stylers: [{ visibility: "off" }] },
 ];
 
@@ -46,16 +51,18 @@ export default function MapCenters() {
       if (!alive) return;
       setCenters(Array.isArray(data) ? data : []);
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const selected = useMemo(
-    () => centers.find(c => c._id === selectedId) || null,
+    () => centers.find((c) => c._id === selectedId) || null,
     [centers, selectedId]
   );
 
   const initialCenter = useMemo(() => {
-    if (!centers.length) return { lat: 23.7806, lng: 90.4070 }; // Dhaka fallback
+    if (!centers.length) return { lat: 23.7806, lng: 90.407 }; // Dhaka fallback
     const lat = centers.reduce((a, c) => a + (c.lat || 0), 0) / centers.length;
     const lng = centers.reduce((a, c) => a + (c.lng || 0), 0) / centers.length;
     return { lat, lng };
@@ -64,7 +71,7 @@ export default function MapCenters() {
   const onMapLoad = (map) => {
     if (centers.length) {
       const bounds = new window.google.maps.LatLngBounds();
-      centers.forEach(c => bounds.extend({ lat: c.lat, lng: c.lng }));
+      centers.forEach((c) => bounds.extend({ lat: c.lat, lng: c.lng }));
       if (!bounds.isEmpty()) map.fitBounds(bounds);
     }
   };
@@ -87,31 +94,38 @@ export default function MapCenters() {
               backgroundColor: "#f7f7f7",
             }}
           >
-          {centers.map((c) => {
-  const isSelected = c._id === selectedId;
-  const short = c?.name ? (c.name.length > 12 ? c.name.slice(0, 12) + "…" : c.name) : "Center";
+            {centers.map((c) => {
+              const isSelected = c._id === selectedId;
+              const short = c?.name
+                ? c.name.length > 12
+                  ? c.name.slice(0, 12) + "…"
+                  : c.name
+                : "Center";
 
-  return (
-    <Marker
-      key={c._id}
-      position={{ lat: c.lat, lng: c.lng }}
-      onClick={() => setSelectedId(c._id)}
-      icon={{
-        url: isSelected ? pinDataUrl("#16a34a") : pinDataUrl("#2563eb"),
-        scaledSize: new google.maps.Size(32, 32),
-        anchor: new google.maps.Point(16, 32),
-        // (optional) nudge label position a bit
-        labelOrigin: new google.maps.Point(16, -2),
-      }}
-      label={{
-        text: short,
-        className: `marker-badge ${isSelected ? "marker-badge--selected" : ""}`,
-      }}
-      zIndex={isSelected ? 999 : 1}
-    />
-  );
-})}
-
+              return (
+                <Marker
+                  key={c._id}
+                  position={{ lat: c.lat, lng: c.lng }}
+                  onClick={() => setSelectedId(c._id)}
+                  icon={{
+                    url: isSelected
+                      ? pinDataUrl("#16a34a")
+                      : pinDataUrl("#2563eb"),
+                    scaledSize: new google.maps.Size(32, 32),
+                    anchor: new google.maps.Point(16, 32),
+                    // (optional) nudge label position a bit
+                    labelOrigin: new google.maps.Point(16, -2),
+                  }}
+                  label={{
+                    text: short,
+                    className: `marker-badge ${
+                      isSelected ? "marker-badge--selected" : ""
+                    }`,
+                  }}
+                  zIndex={isSelected ? 999 : 1}
+                />
+              );
+            })}
           </GoogleMap>
         )}
       </div>
@@ -119,39 +133,71 @@ export default function MapCenters() {
       {/* Details panel under the map */}
       <div className="rounded border bg-white p-4">
         {!selected ? (
-          <div className="text-sm text-gray-600">{centers.length} centers found. Tap a marker to see center details.</div>
+          <div className="text-sm text-gray-600">
+            {centers.length} centers found. Tap a marker to see center details.
+          </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-  {/* Center Name bigger */}
-  <div className="md:col-span-2 text-lg font-semibold text-gray-800">
-    {selected.name}
-  </div>
+            {/* Center Name bigger */}
+            <div className="md:col-span-2 text-lg font-semibold text-gray-800">
+              {selected.name}
+            </div>
 
-  <div><span className="text-gray-500">Address:</span> {selected.address || "-"}</div>
-  <div><span className="text-gray-500">Contact:</span> {selected.contact?.name || "-"}</div>
-  <div><span className="text-gray-500">Phone:</span> {selected.contact?.phone || "-"}</div>
+            <div>
+              <span className="text-gray-500">Address:</span>{" "}
+              {selected.address || "-"}
+            </div>
+            {/* make the lower div to show name and the number in the brackets if available and it must be clickable to call */}
 
-  {/* Highlight Total Voters */}
-  <div className="md:col-span-2 mt-2">
-    <span className="text-gray-500">Total voters:</span>{" "}
-    <span className="text-xl font-bold text-green-700">
-      {selected.totalVoters ?? 0}
-    </span>
-    <div className="ml-4 mt-1 text-sm text-gray-700">
-      <div>Male voters: {selected.maleVoters ?? 0}</div>
-      <div>Female voters: {selected.femaleVoters ?? 0}</div>
-    </div>
-  </div>
+            <div className="md:col-span-2">
+              <span className="text-gray-500">Person To Communicate:</span>{" "}
+              {selected.contact?.name ? (
+                selected.contact?.phone ? (
+                  <a href={`tel:${selected.contact.phone}`} className=" ">
+                    {selected.contact.name} ({selected.contact.phone})
+                  </a>
+                ) : (
+                  selected.contact.name
+                )
+              ) : (
+                "-"
+              )}
+            </div>
 
-  <div className="md:col-span-2">
-    <span className="text-gray-500">Notes:</span> {selected.notes || "-"}
-  </div>
+            {/* Highlight Total Voters */}
+            <div className="md:col-span-2 mt-2">
+              <span className="text-gray-500">Total voters:</span>{" "}
+              <span className="text-md font-bold text-green-700">
+                {selected.totalVoters ?? 0}
+              </span>
+              <div className="ml-4 mt-1 text-sm text-gray-700">
+                <div>Male voters: {selected.maleVoters ?? 0}</div>
+                <div>Female voters: {selected.femaleVoters ?? 0}</div>
+              </div>
+            </div>
 
-  <div className="md:col-span-2 mt-2">
-    <a className="text-blue-600 underline mr-3" href={`/centers/${selected._id}`}>Edit</a>
-    <a className="text-gray-600 underline" href={`/centers`}>All centers</a>
-  </div>
-</div>
+            <div className="md:col-span-2">
+              <span className="text-gray-500">Notes:</span>{" "}
+              {selected.notes || "-"}
+            </div>
+
+            <div className="md:col-span-2 mt-4">
+              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
+              <CenterAreasPanel center={selected} />
+            </div>
+
+            <div className="md:col-span-2 mt-2">
+              <a
+                className="text-blue-600 underline mr-3"
+                href={`/centers/${selected._id}`}
+              >
+                Edit
+              </a>
+              <a className="text-gray-600 underline" href={`/centers`}>
+                All centers
+              </a>
+            </div>
+          </div>
         )}
       </div>
     </div>
