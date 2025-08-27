@@ -25,7 +25,10 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
   for (const k of ["lat", "lng", "totalVoters", "maleVoters", "femaleVoters"]) {
     if (k in set && (Number.isNaN(set[k]) || set[k] < 0)) {
-      return new Response(JSON.stringify({ error: `${k} must be a non-negative number` }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: `${k} must be a non-negative number` }),
+        { status: 400 }
+      );
     }
   }
 
@@ -44,7 +47,20 @@ export const PATCH = withPermApi(async (req, { params }) => {
   ).lean();
 
   if (!doc) {
-    return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+    });
   }
   return Response.json(doc);
 }, "edit_center");
+
+// DELETE /api/centers/:id
+export const DELETE = withPermApi(async (_req, { params }) => {
+  await dbConnect();
+  const r = await Center.findByIdAndDelete(params.id);
+  if (!r)
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+    });
+  return Response.json({ ok: true });
+}, "delete_center");

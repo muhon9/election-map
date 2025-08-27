@@ -15,6 +15,10 @@ const AreaSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     code: String,
+    totalVoters: { type: Number, default: 0, min: 0 },
+    maleVoters: { type: Number, default: 0, min: 0 },
+    femaleVoters: { type: Number, default: 0, min: 0 },
+
     people: [PersonSchema],
   },
   { _id: true, timestamps: true }

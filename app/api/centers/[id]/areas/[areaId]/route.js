@@ -8,8 +8,23 @@ export const PATCH = withPermApi(async (req, { params }) => {
   await dbConnect();
   const body = await req.json();
   const set = {};
-  if ("name" in body) set["areas.$[a].name"] = body.name;
+
+  if ("name" in body) set["areas.$[a].name"] = body.name || "";
   if ("code" in body) set["areas.$[a].code"] = body.code || "";
+
+  const numbers = ["totalVoters", "maleVoters", "femaleVoters"];
+  for (const k of numbers) {
+    if (k in body) {
+      const v = Number(body[k]);
+      if (!Number.isFinite(v) || v < 0) {
+        return new Response(
+          JSON.stringify({ error: `${k} must be a non-negative number` }),
+          { status: 400 }
+        );
+      }
+      set[`areas.$[a].${k}`] = v;
+    }
+  }
 
   const session = await getServerSession(authOptions);
 

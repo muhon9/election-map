@@ -46,9 +46,8 @@ export default function MapCenters() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const res = await fetch("/api/centers");
+      const res = await fetch(`/api/centers?mode=map`, { cache: "no-store" });
       const data = await res.json();
-      if (!alive) return;
       setCenters(Array.isArray(data) ? data : []);
     })();
     return () => {
@@ -189,7 +188,7 @@ export default function MapCenters() {
             <div className="md:col-span-2 mt-2">
               <a
                 className="text-blue-600 underline mr-3"
-                href={`/centers/${selected._id}`}
+                href={`/centers/${selected._id}/edit`}
               >
                 Edit
               </a>

@@ -19,40 +19,55 @@ export const GET = withPermApi(async (_req, { params }) => {
 // POST /api/centers/:id/areas  -> create area
 export const POST = withPermApi(async (req, { params }) => {
   await dbConnect();
-  const { name, code } = await req.json();
-  if (!name) {
+  const body = await req.json();
+  const name = (body.name || "").trim();
+  if (!name)
     return new Response(JSON.stringify({ error: "name required" }), {
       status: 400,
     });
+
+  // Coerce numbers (default 0), validate non-negative
+  const totalVoters = Number(body.totalVoters ?? 0);
+  const maleVoters = Number(body.maleVoters ?? 0);
+  const femaleVoters = Number(body.femaleVoters ?? 0);
+  for (const [k, v] of Object.entries({
+    totalVoters,
+    maleVoters,
+    femaleVoters,
+  })) {
+    if (!Number.isFinite(v) || v < 0) {
+      return new Response(
+        JSON.stringify({ error: `${k} must be a non-negative number` }),
+        { status: 400 }
+      );
+    }
   }
 
   const session = await getServerSession(authOptions);
 
-  // Push the new area and return document with areas projected
   const doc = await Center.findByIdAndUpdate(
     params.id,
     {
-      $push: { areas: { name, code: code || "" } },
+      $push: {
+        areas: {
+          name,
+          code: body.code || "",
+          totalVoters,
+          maleVoters,
+          femaleVoters,
+        },
+      },
       $set: { updatedBy: session?.user?.id || null },
     },
-    {
-      new: true,
-      projection: { areas: 1 }, // <-- use projection (not fields)
-    }
+    { new: true, projection: { areas: 1 } }
   ).lean();
 
-  if (!doc) {
+  if (!doc)
     return new Response(JSON.stringify({ error: "Center not found" }), {
       status: 404,
     });
-  }
 
   const areas = Array.isArray(doc.areas) ? doc.areas : [];
   const created = areas.length ? areas[areas.length - 1] : null;
-
-  // If for some reason projection didn’t include it, fall back to returning ok
-  if (!created) {
-    return Response.json({ ok: true });
-  }
-  return Response.json(created);
+  return Response.json(created ?? { ok: true });
 }, "add_center");
