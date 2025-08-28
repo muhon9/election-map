@@ -80,7 +80,9 @@ export default function AreasEditor({ centerId, initialAreas = [] }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Areas</h2>
+      <h2 className="text-lg font-semibold">
+        Add a New Area under this center{" "}
+      </h2>
 
       {/* Add Area */}
       <form
@@ -137,7 +139,7 @@ export default function AreasEditor({ centerId, initialAreas = [] }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-700">
             Female Voters
           </label>
           <input
@@ -247,7 +249,7 @@ function AreaRow({ centerId, area, onDelete, onEdited, onPeopleChanged }) {
       {!editing ? (
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="font-medium text-gray-900 truncate">
+            <div className="font-medium text-green-700 truncate">
               {area.name}
               {area.code ? ` (${area.code})` : ""}
             </div>
@@ -276,7 +278,7 @@ function AreaRow({ centerId, area, onDelete, onEdited, onPeopleChanged }) {
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-green-700 mb-1">
                 Area Name
               </label>
               <input
@@ -427,12 +429,49 @@ function PeopleEditor({ centerId, areaId, initialPeople }) {
 
   return (
     <div className="mt-3">
-      <div className="font-medium text-sm mb-2">People</div>
+      <div className="font-medium text-sm mb-2">
+        {people.length} Important People are listed in this area
+      </div>
 
       {/* Add person */}
+
+      {/* People list with inline edit */}
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="text-left p-2">Name</th>
+              <th className="text-left p-2">Phone</th>
+              <th className="text-left p-2">Designation</th>
+              {/* <th className="text-left p-2">Importance</th> */}
+              <th className="text-left p-2">Notes</th>
+              <th className="text-left p-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((row) => (
+              <PersonRow
+                key={row._id}
+                centerId={centerId}
+                areaId={areaId}
+                person={row}
+                onEdited={onPersonEdited}
+                onDelete={deletePerson}
+              />
+            ))}
+            {!people.length && (
+              <tr>
+                <td className="p-3 text-gray-500" colSpan={6}>
+                  No people yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
       <form
         onSubmit={addPerson}
-        className="grid grid-cols-1 md:grid-cols-6 gap-3"
+        className="grid grid-cols-1 md:grid-cols-6 gap-3 mt-3"
       >
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -465,7 +504,7 @@ function PeopleEditor({ centerId, areaId, initialPeople }) {
             onChange={(e) => setP({ ...p, designation: e.target.value })}
           />
         </div>
-        <div>
+        {/* <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Importance
           </label>
@@ -477,7 +516,7 @@ function PeopleEditor({ centerId, areaId, initialPeople }) {
             value={p.importance}
             onChange={(e) => setP({ ...p, importance: e.target.value })}
           />
-        </div>
+        </div> */}
         <div className="md:col-span-2">
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Notes
@@ -490,46 +529,11 @@ function PeopleEditor({ centerId, areaId, initialPeople }) {
         </div>
         <div>
           <label className="block text-transparent mb-1 select-none">.</label>
-          <button className="w-full bg-green-600 text-white px-3 py-2 rounded">
+          <button className="w-full bg-gray-600 text-white px-3 py-2 rounded">
             {adding ? "Adding..." : "Add"}
           </button>
         </div>
       </form>
-
-      {/* People list with inline edit */}
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Phone</th>
-              <th className="text-left p-2">Designation</th>
-              <th className="text-left p-2">Importance</th>
-              <th className="text-left p-2">Notes</th>
-              <th className="text-left p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {people.map((row) => (
-              <PersonRow
-                key={row._id}
-                centerId={centerId}
-                areaId={areaId}
-                person={row}
-                onEdited={onPersonEdited}
-                onDelete={deletePerson}
-              />
-            ))}
-            {!people.length && (
-              <tr>
-                <td className="p-3 text-gray-500" colSpan={6}>
-                  No people yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
@@ -607,7 +611,7 @@ function PersonRow({ centerId, areaId, person, onEdited, onDelete }) {
             )}
           </td>
           <td className="p-2">{person.designation || "—"}</td>
-          <td className="p-2">{person.importance ?? 0}</td>
+          {/* <td className="p-2">{person.importance ?? 0}</td> */}
           <td className="p-2">{person.notes || "—"}</td>
           <td className="p-2">
             <button
@@ -657,7 +661,7 @@ function PersonRow({ centerId, areaId, person, onEdited, onDelete }) {
                 onChange={(e) => u("designation", e.target.value)}
               />
             </div>
-            <div>
+            {/* <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Importance
               </label>
@@ -669,7 +673,7 @@ function PersonRow({ centerId, areaId, person, onEdited, onDelete }) {
                 value={form.importance}
                 onChange={(e) => u("importance", e.target.value)}
               />
-            </div>
+            </div> */}
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Notes

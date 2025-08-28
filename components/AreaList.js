@@ -171,7 +171,7 @@ function AreaCard({ centerId, area, onDelete }) {
             value={p.designation}
             onChange={(e) => setP({ ...p, designation: e.target.value })}
           />
-          <input
+          {/* <input
             className="border px-2 py-1 rounded col-span-1"
             type="number"
             min="0"
@@ -179,7 +179,7 @@ function AreaCard({ centerId, area, onDelete }) {
             placeholder="Importance"
             value={p.importance}
             onChange={(e) => setP({ ...p, importance: e.target.value })}
-          />
+          /> */}
           <input
             className="border px-2 py-1 rounded col-span-5 md:col-span-3"
             placeholder="Notes"

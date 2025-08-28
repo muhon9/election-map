@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import CenterAreasPanel from "./CenterAreasPanel";
+import { useSession } from "next-auth/react";
+import { has } from "@/lib/perm";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 const containerStyle = { width: "100%", height: "420px" };
 
-// Minimal style (no shops/POIs/etc)
+// Minimal style (hide all labels/POIs/etc)
 const MINIMAL_MAP_STYLE = [
-  { elementType: "labels", stylers: [{ visibility: "off" }] }, // hide ALL labels
+  { elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
@@ -22,7 +25,6 @@ const MINIMAL_MAP_STYLE = [
 
 // Simple SVG pin as data URL; colorizable
 function pinDataUrl(color = "#2563eb") {
-  // classic pin with a white dot, scaled to 40x40
   return (
     "data:image/svg+xml;utf8," +
     encodeURIComponent(`
@@ -38,16 +40,28 @@ export default function MapCenters() {
   const [centers, setCenters] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
 
+  // URL utils for preserving selected marker
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const selFromUrl = sp.get("sel");
+
+  const { data: session } = useSession();
+  const user = session?.user;
+  const canEdit = has(user, "edit_center");
+
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   });
 
+  // Fetch centers (full docs in map mode)
   useEffect(() => {
     let alive = true;
     (async () => {
       const res = await fetch(`/api/centers?mode=map`, { cache: "no-store" });
-      const data = await res.json();
+      const data = await res.json().catch(() => []);
+      if (!alive) return;
       setCenters(Array.isArray(data) ? data : []);
     })();
     return () => {
@@ -55,8 +69,15 @@ export default function MapCenters() {
     };
   }, []);
 
+  // When centers are loaded, honor ?sel from the URL
+  useEffect(() => {
+    if (!centers.length || !selFromUrl) return;
+    const exists = centers.some((c) => String(c._id) === String(selFromUrl));
+    if (exists) setSelectedId(selFromUrl);
+  }, [centers, selFromUrl]);
+
   const selected = useMemo(
-    () => centers.find((c) => c._id === selectedId) || null,
+    () => centers.find((c) => String(c._id) === String(selectedId)) || null,
     [centers, selectedId]
   );
 
@@ -75,6 +96,27 @@ export default function MapCenters() {
     }
   };
 
+  // Write sel into URL without full navigation (shallow)
+  function setSelInUrl(idOrNull) {
+    const params = new URLSearchParams(sp.toString());
+    if (idOrNull) params.set("sel", String(idOrNull));
+    else params.delete("sel");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  // Clicking a marker -> select + update URL (?sel=...)
+  function onMarkerClick(id) {
+    setSelectedId(id);
+    setSelInUrl(id);
+  }
+
+  // Clicking blank map clears selection + URL
+  function clearSelection() {
+    setSelectedId(null);
+    setSelInUrl(null);
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded border overflow-hidden">
@@ -84,7 +126,7 @@ export default function MapCenters() {
             center={initialCenter}
             zoom={12}
             onLoad={onMapLoad}
-            onClick={() => setSelectedId(null)} // click blank map to clear
+            onClick={clearSelection}
             options={{
               styles: MINIMAL_MAP_STYLE,
               disableDefaultUI: true,
@@ -94,7 +136,7 @@ export default function MapCenters() {
             }}
           >
             {centers.map((c) => {
-              const isSelected = c._id === selectedId;
+              const isSelected = String(c._id) === String(selectedId);
               const short = c?.name
                 ? c.name.length > 12
                   ? c.name.slice(0, 12) + "…"
@@ -105,14 +147,13 @@ export default function MapCenters() {
                 <Marker
                   key={c._id}
                   position={{ lat: c.lat, lng: c.lng }}
-                  onClick={() => setSelectedId(c._id)}
+                  onClick={() => onMarkerClick(c._id)}
                   icon={{
                     url: isSelected
                       ? pinDataUrl("#16a34a")
                       : pinDataUrl("#2563eb"),
                     scaledSize: new google.maps.Size(32, 32),
                     anchor: new google.maps.Point(16, 32),
-                    // (optional) nudge label position a bit
                     labelOrigin: new google.maps.Point(16, -2),
                   }}
                   label={{
@@ -146,24 +187,36 @@ export default function MapCenters() {
               <span className="text-gray-500">Address:</span>{" "}
               {selected.address || "-"}
             </div>
-            {/* make the lower div to show name and the number in the brackets if available and it must be clickable to call */}
+            {/* <div>
+              <span className="text-gray-500">Lat/Lng:</span> {selected.lat},{" "}
+              {selected.lng}
+            </div> */}
 
-            <div className="md:col-span-2">
-              <span className="text-gray-500">Person To Communicate:</span>{" "}
+            {/* Person to communicate (clickable phone) */}
+            {/* <div className="md:col-span-2">
+              <span className="text-gray-500">Person to communicate:</span>{" "}
               {selected.contact?.name ? (
                 selected.contact?.phone ? (
-                  <a href={`tel:${selected.contact.phone}`} className=" ">
+                  <a
+                    href={`tel:${selected.contact.phone}`}
+                    className="text-blue-600 underline"
+                  >
                     {selected.contact.name} ({selected.contact.phone})
                   </a>
                 ) : (
                   selected.contact.name
                 )
               ) : (
-                "-"
+                "—"
               )}
-            </div>
+            </div> */}
 
             {/* Highlight Total Voters */}
+
+            <div className="md:col-span-2 mt-4">
+              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
+              <CenterAreasPanel center={selected} />
+            </div>
             <div className="md:col-span-2 mt-2">
               <span className="text-gray-500">Total voters:</span>{" "}
               <span className="text-md font-bold text-green-700">
@@ -175,30 +228,56 @@ export default function MapCenters() {
               </div>
             </div>
 
-            <div className="md:col-span-2">
-              <span className="text-gray-500">Notes:</span>{" "}
-              {selected.notes || "-"}
-            </div>
+            {selected.notes && (
+              <div className="md:col-span-2">
+                <span className="text-gray-500">Notes:</span> {selected.notes}
+              </div>
+            )}
 
-            <div className="md:col-span-2 mt-4">
-              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
-              <CenterAreasPanel center={selected} />
-            </div>
-
-            <div className="md:col-span-2 mt-2">
+            <div className="md:col-span-2 mt-2 flex flex-wrap items-center gap-3">
               <a
-                className="text-blue-600 underline mr-3"
-                href={`/centers/${selected._id}/edit`}
+                className="text-gray-700 border px-3 py-1.5 rounded hover:bg-gray-50"
+                href={`/centers`}
               >
-                Edit
-              </a>
-              <a className="text-gray-600 underline" href={`/centers`}>
                 All centers
               </a>
+              <a
+                className="text-gray-700 underline"
+                href={`/centers/${selected._id}`}
+              >
+                See details of this center
+              </a>
+              {canEdit && (
+                <a
+                  className="text-white bg-blue-600 px-3 py-1.5 rounded hover:bg-blue-700"
+                  href={`/centers/${selected._id}/edit`}
+                >
+                  Edit
+                </a>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Marker label styling */}
+      <style jsx global>{`
+        .marker-badge {
+          background: white;
+          padding: 2px 6px;
+          border-radius: 4px;
+          border: 1px solid rgba(0, 0, 0, 0.1);
+          font-weight: 600;
+          font-size: 11px;
+          color: #111827;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+          pointer-events: none; /* so click goes to marker */
+        }
+        .marker-badge--selected {
+          background: #ecfdf5; /* green-50 */
+          border-color: #22c55e33;
+        }
+      `}</style>
     </div>
   );
 }
