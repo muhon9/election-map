@@ -9,7 +9,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 const containerStyle = { width: "100%", height: "420px" };
 
-// Minimal style (hide all labels/POIs/etc)
+// Minimal style: hide *all* labels and most clutter
 const MINIMAL_MAP_STYLE = [
   { elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
@@ -40,27 +40,28 @@ export default function MapCenters() {
   const [centers, setCenters] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
 
-  // URL utils for preserving selected marker
+  // URL utils
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const selFromUrl = sp.get("sel");
 
+  // RBAC
   const { data: session } = useSession();
   const user = session?.user;
   const canEdit = has(user, "edit_center");
 
+  // Google Maps loader
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   });
 
-  // Fetch centers (full docs in map mode)
+  // Load centers for map mode (returns full docs)
   useEffect(() => {
     let alive = true;
     (async () => {
       const res = await fetch(`/api/centers?mode=map`, { cache: "no-store" });
-      const data = await res.json().catch(() => []);
+      const data = await res.json();
       if (!alive) return;
       setCenters(Array.isArray(data) ? data : []);
     })();
@@ -69,18 +70,29 @@ export default function MapCenters() {
     };
   }, []);
 
-  // When centers are loaded, honor ?sel from the URL
+  // Sync selected center from URL (?sel=ID) whenever centers or URL changes
   useEffect(() => {
-    if (!centers.length || !selFromUrl) return;
-    const exists = centers.some((c) => String(c._id) === String(selFromUrl));
-    if (exists) setSelectedId(selFromUrl);
-  }, [centers, selFromUrl]);
+    const selFromUrl = sp.get("sel");
+    if (!selFromUrl) {
+      setSelectedId(null);
+      return;
+    }
+    // Only set if that ID exists among loaded centers
+    if (centers.some((c) => String(c._id) === selFromUrl)) {
+      setSelectedId(selFromUrl);
+    } else {
+      // If not found (e.g., list not loaded yet), leave as-is; another effect run will set it.
+      // Optionally: setSelectedId(null);
+    }
+  }, [sp, centers]);
 
+  // Keep a memoized selected center
   const selected = useMemo(
     () => centers.find((c) => String(c._id) === String(selectedId)) || null,
     [centers, selectedId]
   );
 
+  // Initial center positioning
   const initialCenter = useMemo(() => {
     if (!centers.length) return { lat: 23.7806, lng: 90.407 }; // Dhaka fallback
     const lat = centers.reduce((a, c) => a + (c.lat || 0), 0) / centers.length;
@@ -88,15 +100,20 @@ export default function MapCenters() {
     return { lat, lng };
   }, [centers]);
 
+  // Fit bounds once map loads and data present
   const onMapLoad = (map) => {
     if (centers.length) {
       const bounds = new window.google.maps.LatLngBounds();
-      centers.forEach((c) => bounds.extend({ lat: c.lat, lng: c.lng }));
+      centers.forEach((c) => {
+        if (typeof c.lat === "number" && typeof c.lng === "number") {
+          bounds.extend({ lat: c.lat, lng: c.lng });
+        }
+      });
       if (!bounds.isEmpty()) map.fitBounds(bounds);
     }
   };
 
-  // Write sel into URL without full navigation (shallow)
+  // Helper: write sel into URL without full nav
   function setSelInUrl(idOrNull) {
     const params = new URLSearchParams(sp.toString());
     if (idOrNull) params.set("sel", String(idOrNull));
@@ -105,7 +122,7 @@ export default function MapCenters() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  // Clicking a marker -> select + update URL (?sel=...)
+  // Clicking a marker -> select + update URL
   function onMarkerClick(id) {
     setSelectedId(id);
     setSelInUrl(id);
@@ -119,6 +136,27 @@ export default function MapCenters() {
 
   return (
     <div className="space-y-3">
+      {/* Marker label (white card) styles */}
+      <style jsx global>{`
+        .marker-badge {
+          background: white;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 6px;
+          padding: 2px 6px;
+          font-size: 11px;
+          line-height: 1.2;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+          transform: translateY(-6px);
+          pointer-events: none; /* keep clicks on marker, not label */
+          color: #111827; /* gray-900 */
+          font-weight: 600;
+        }
+        .marker-badge--selected {
+          border-color: rgba(16, 185, 129, 0.25); /* green-500-ish */
+          box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+        }
+      `}</style>
+
       <div className="rounded border overflow-hidden">
         {isLoaded && (
           <GoogleMap
@@ -136,18 +174,18 @@ export default function MapCenters() {
             }}
           >
             {centers.map((c) => {
-              const isSelected = String(c._id) === String(selectedId);
+              const id = String(c._id);
+              const isSelected = id === String(selectedId);
               const short = c?.name
                 ? c.name.length > 12
                   ? c.name.slice(0, 12) + "…"
                   : c.name
                 : "Center";
-
               return (
                 <Marker
-                  key={c._id}
+                  key={id}
                   position={{ lat: c.lat, lng: c.lng }}
-                  onClick={() => onMarkerClick(c._id)}
+                  onClick={() => onMarkerClick(id)}
                   icon={{
                     url: isSelected
                       ? pinDataUrl("#16a34a")
@@ -178,45 +216,38 @@ export default function MapCenters() {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-            {/* Center Name bigger */}
-            <div className="md:col-span-2 text-lg font-semibold text-gray-800">
-              {selected.name}
+            {/* Center Name */}
+            <div className="md:col-span-2 flex items-center justify-between gap-3">
+              <div className="text-lg font-semibold text-gray-800">
+                {selected.name}
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Details page */}
+                <a
+                  className="text-gray-700 underline"
+                  href={`/centers/${selected._id}`}
+                >
+                  See details
+                </a>
+                {/* Edit (RBAC) */}
+                {canEdit && (
+                  <a
+                    className="inline-flex items-center px-3 py-1.5 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+                    href={`/centers/${selected._id}/edit`}
+                  >
+                    Edit
+                  </a>
+                )}
+              </div>
             </div>
 
+            {/* Address */}
             <div>
               <span className="text-gray-500">Address:</span>{" "}
-              {selected.address || "-"}
+              {selected.address || "—"}
             </div>
-            {/* <div>
-              <span className="text-gray-500">Lat/Lng:</span> {selected.lat},{" "}
-              {selected.lng}
-            </div> */}
 
-            {/* Person to communicate (clickable phone) */}
-            {/* <div className="md:col-span-2">
-              <span className="text-gray-500">Person to communicate:</span>{" "}
-              {selected.contact?.name ? (
-                selected.contact?.phone ? (
-                  <a
-                    href={`tel:${selected.contact.phone}`}
-                    className="text-blue-600 underline"
-                  >
-                    {selected.contact.name} ({selected.contact.phone})
-                  </a>
-                ) : (
-                  selected.contact.name
-                )
-              ) : (
-                "—"
-              )}
-            </div> */}
-
-            {/* Highlight Total Voters */}
-
-            <div className="md:col-span-2 mt-4">
-              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
-              <CenterAreasPanel center={selected} />
-            </div>
+            {/* Voters summary */}
             <div className="md:col-span-2 mt-2">
               <span className="text-gray-500">Total voters:</span>{" "}
               <span className="text-md font-bold text-green-700">
@@ -228,56 +259,35 @@ export default function MapCenters() {
               </div>
             </div>
 
+            {/* Notes (optional) */}
             {selected.notes && (
               <div className="md:col-span-2">
                 <span className="text-gray-500">Notes:</span> {selected.notes}
               </div>
             )}
 
-            <div className="md:col-span-2 mt-2 flex flex-wrap items-center gap-3">
-              <a
-                className="text-gray-700 border px-3 py-1.5 rounded hover:bg-gray-50"
-                href={`/centers`}
-              >
+            {/* Areas & People (lazy; handled inside this component) */}
+            <div className="md:col-span-2 mt-4">
+              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
+              {/* Pass the selected center to your panel that fetches areas and shows People (committee/renowned/contacts) */}
+              <CenterAreasPanel center={selected} />
+            </div>
+
+            {/* Footer links */}
+            <div className="md:col-span-2 mt-2">
+              <a className="text-gray-600 underline mr-3" href={`/centers`}>
                 All centers
               </a>
-              <a
-                className="text-gray-700 underline"
-                href={`/centers/${selected._id}`}
+              <button
+                className="text-gray-600 hover:underline"
+                onClick={clearSelection}
               >
-                See details of this center
-              </a>
-              {canEdit && (
-                <a
-                  className="text-white bg-blue-600 px-3 py-1.5 rounded hover:bg-blue-700"
-                  href={`/centers/${selected._id}/edit`}
-                >
-                  Edit
-                </a>
-              )}
+                Clear selection
+              </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Marker label styling */}
-      <style jsx global>{`
-        .marker-badge {
-          background: white;
-          padding: 2px 6px;
-          border-radius: 4px;
-          border: 1px solid rgba(0, 0, 0, 0.1);
-          font-weight: 600;
-          font-size: 11px;
-          color: #111827;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-          pointer-events: none; /* so click goes to marker */
-        }
-        .marker-badge--selected {
-          background: #ecfdf5; /* green-50 */
-          border-color: #22c55e33;
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 // app/(dash)/centers/[id]/edit/page.js
 import dbConnect from "@/lib/db";
 import Center from "@/models/Center";
+import AreaList from "@/components/AreaList";
 import CenterForm from "@/components/CenterForm";
-import AreasEditor from "@/components/AreasEditor";
+import PeopleEditor from "@/components/PeopleEditor"; // optional if you link into each Area
 
 export default async function CenterEditPage({ params }) {
   await dbConnect();
@@ -11,15 +12,12 @@ export default async function CenterEditPage({ params }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Edit Center</h1>
+      <h1 className="text-xl font-semibold">Edit Center – {center.name}</h1>
       <CenterForm center={JSON.parse(JSON.stringify(center))} />
-      <div>
-        {/* <h2 className="text-lg font-semibold mb-2">Areas & People</h2> */}
-        <AreasEditor
-          centerId={String(center._id)}
-          initialAreas={JSON.parse(JSON.stringify(center.areas || []))}
-        />
-      </div>
+      <section>
+        <h2 className="text-lg font-semibold mb-2">Areas</h2>
+        <AreaList centerId={String(center._id)} />
+      </section>
     </div>
   );
 }
