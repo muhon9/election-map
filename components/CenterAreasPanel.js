@@ -200,7 +200,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
             {canEdit && (
               <a
                 className="px-2 py-1 border rounded hover:bg-gray-50"
-                href={`/areas/${area._id}?tab=COMMITTEE`}
+                href={`/areas/${area._id}/edit?tab=COMMITTEE`}
               >
                 Add People
               </a>

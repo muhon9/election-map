@@ -1,257 +1,301 @@
-// app/(dash)/centers/[id]/page.js
-import dbConnect from "@/lib/db";
-import Center from "@/models/Center";
-import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+"use client";
 
-function pct(n, total) {
-  if (!total) return 0;
-  const v = Math.round((Number(n || 0) / Number(total)) * 100);
-  return Number.isFinite(v) ? v : 0;
-}
+import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { has } from "@/lib/perm";
+import CenterAreasPanel from "@/components/CenterAreasPanel";
+import { useParams, useRouter } from "next/navigation";
 
-export default async function CenterInfoPage({ params }) {
-  await dbConnect();
-  const center = await Center.findById(params.id).lean();
+export default function CenterDetailsPage() {
+  const { id } = useParams(); // /centers/[id]
+  const router = useRouter();
 
-  const session = await getServerSession(authOptions);
-  const perms = session?.user?.permissions || session?.permissions || [];
-  const canEdit = perms.includes?.("edit_center");
+  const { data: session } = useSession();
+  const user = session?.user;
+  const canEdit = has(user, "edit_center");
 
-  if (!center) {
+  const [center, setCenter] = useState(null);
+  const [areas, setAreas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [areasLoading, setAreasLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [areasErr, setAreasErr] = useState("");
+
+  // Load center
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+        const res = await fetch(`/api/centers/${id}`, { cache: "no-store" });
+        if (!res.ok)
+          throw new Error(
+            (await res.json().catch(() => ({})))?.error ||
+              "Failed to load center"
+          );
+        const j = await res.json();
+        if (!alive) return;
+        setCenter(j || null);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e.message || "Failed to load center");
+        setCenter(null);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  // Load areas (for stats and the panel)
+  useEffect(() => {
+    if (!center?._id) return;
+    let alive = true;
+    (async () => {
+      try {
+        setAreasLoading(true);
+        setAreasErr("");
+        // Pull a generous number. If you expect more, add UI pagination & totals later.
+        const res = await fetch(
+          `/api/centers/${center._id}/areas?page=1&limit=1000&sort=createdAt&dir=desc`,
+          { cache: "no-store" }
+        );
+        const j = await res.json();
+        if (!alive) return;
+        if (!res.ok || !Array.isArray(j.items))
+          throw new Error(j?.error || "Failed to load areas");
+        setAreas(j.items);
+      } catch (e) {
+        if (!alive) return;
+        setAreas([]);
+        setAreasErr(e.message || "Failed to load areas");
+      } finally {
+        if (alive) setAreasLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [center?._id]);
+
+  // Derived stats
+  const total = Number(center?.totalVoters ?? 0);
+  const male = Number(center?.maleVoters ?? 0);
+  const female = Number(center?.femaleVoters ?? 0);
+  const areasCount = areas.length;
+
+  // Percentages for the stacked bar
+  const malePct = useMemo(() => {
+    const denom = male + female;
+    return denom > 0 ? Math.round((male / denom) * 100) : 0;
+  }, [male, female]);
+  const femalePct = useMemo(() => {
+    const denom = male + female;
+    return denom > 0 ? Math.round((female / denom) * 100) : 0;
+  }, [male, female]);
+
+  // Area with most voters
+  const areaWithMostVoters = useMemo(() => {
+    if (!areas.length) return null;
+    return areas.reduce((acc, a) => {
+      const tv = Number(a.totalVoters ?? 0);
+      if (!acc) return a;
+      return tv > Number(acc.totalVoters ?? 0) ? a : acc;
+    }, null);
+  }, [areas]);
+
+  // little helper: tel link for contact
+  const contactDisplay = useMemo(() => {
+    if (!center?.contact) return "—";
+    const { name, phone } = center.contact;
+    if (!name && !phone) return "—";
+    if (name && phone)
+      return (
+        <a className="text-blue-600 underline" href={`tel:${phone}`}>
+          {name} ({phone})
+        </a>
+      );
+    if (name) return name;
     return (
-      <div className="p-4">
-        <h1 className="text-xl font-semibold">Center not found</h1>
-        <p className="text-sm text-gray-600 mt-2">
-          The requested center does not exist or you don’t have access.
-        </p>
-        <div className="mt-4">
-          <Link href="/centers" className="text-blue-600 underline">
-            Back to centers
-          </Link>
-        </div>
-      </div>
+      <a className="text-blue-600 underline" href={`tel:${phone}`}>
+        {phone}
+      </a>
     );
-  }
-
-  const total = center.totalVoters ?? 0;
-  const male = center.maleVoters ?? 0;
-  const female = center.femaleVoters ?? 0;
-  const malePct = pct(male, total);
-  const femalePct = pct(female, total);
-  const areas = Array.isArray(center.areas) ? center.areas : [];
-  const totalPeople = areas.reduce((s, a) => s + (a.people?.length || 0), 0);
+  }, [center]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{center.name}</h1>
-          <div className="text-sm text-gray-600 mt-1">
-            {center.address || "—"}
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Lat: {center.lat} • Lng: {center.lng} •{" "}
-            <a
-              href={`https://www.google.com/maps?q=${center.lat},${center.lng}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 underline"
-            >
-              Open in Google Maps
-            </a>
-          </div>
-        </div>
-
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Link
-            href="/centers"
-            className="px-3 py-2 border rounded hover:bg-gray-50"
+          <button
+            className="px-3 py-1.5 border rounded hover:bg-gray-50"
+            onClick={() => router.back()}
           >
-            Back
-          </Link>
-          {canEdit && (
-            <Link
-              href={`/centers/${center._id}/edit`}
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Edit
-            </Link>
-          )}
+            ← Back
+          </button>
+          <a className="text-sm text-blue-600 underline" href="/centers">
+            All centers
+          </a>
         </div>
+        {canEdit && center && (
+          <a
+            className="px-3 py-1.5 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+            href={`/centers/${center._id}/edit`}
+          >
+            Edit
+          </a>
+        )}
       </div>
 
-      {/* Demographics */}
-      <section className="rounded border bg-white p-4 space-y-4">
-        <h2 className="text-lg font-semibold">Demographics</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Stat label="Total voters" value={total} emphasis />
-          <Stat label="Male voters" value={male} sub />
-          <Stat label="Female voters" value={female} sub />
-          <Stat
-            label="Areas / People"
-            value={`${areas.length} / ${totalPeople}`}
-          />
+      {/* Heading */}
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">
+            {loading ? "Loading…" : center?.name || "Center"}
+          </h1>
+          {center?.address ? (
+            <p className="text-sm text-gray-600">{center.address}</p>
+          ) : null}
         </div>
+        {center?.lat != null && center?.lng != null && (
+          <div className="text-xs text-gray-500">
+            Lat: {center.lat} · Lng: {center.lng}
+          </div>
+        )}
+      </header>
 
-        {/* Percent bars */}
-        <div className="space-y-2">
-          <Bar label={`Male ${malePct}%`} pct={malePct} />
-          <Bar label={`Female ${femalePct}%`} pct={femalePct} />
+      {/* Error / Loading */}
+      {loading && (
+        <div className="rounded border bg-white p-4 text-sm text-gray-600">
+          Loading center details…
         </div>
+      )}
+      {!loading && err && (
+        <div className="rounded border bg-white p-4 text-sm text-red-600">
+          {err}
+        </div>
+      )}
 
-        {/* Notes + Contact */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <div className="text-sm text-gray-500 mb-1">Contact</div>
-            <div className="rounded border p-3">
-              <div className="text-sm">
+      {/* Content */}
+      {!loading && !err && center && (
+        <>
+          {/* Stat cards */}
+          <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard
+              title="Total Voters"
+              value={total}
+              accent="text-green-700"
+            />
+            <StatCard title="Male" value={male} />
+            <StatCard title="Female" value={female} />
+            <StatCard title="Areas" value={areasCount} />
+          </section>
+
+          {/* Stacked bar (Male vs Female) */}
+          <section className="rounded border bg-white p-4">
+            <h2 className="text-sm font-semibold mb-3">Voters breakdown</h2>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span>Male</span>
+                <span>{malePct}%</span>
+              </div>
+              <div className="w-full h-3 rounded bg-gray-200 overflow-hidden">
+                <div
+                  className="h-3"
+                  style={{
+                    width: `${malePct}%`,
+                    backgroundColor: "#60a5fa" /* blue-400 */,
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-gray-600 pt-2">
+                <span>Female</span>
+                <span>{femalePct}%</span>
+              </div>
+              <div className="w-full h-3 rounded bg-gray-200 overflow-hidden">
+                <div
+                  className="h-3"
+                  style={{
+                    width: `${femalePct}%`,
+                    backgroundColor: "#f472b6" /* pink-400 */,
+                  }}
+                />
+              </div>
+
+              <div className="text-xs text-gray-500 mt-2">
+                Total considered: {male + female} (male + female). Overall
+                voters: {total}.
+              </div>
+            </div>
+          </section>
+
+          {/* Quick facts */}
+          <section className="rounded border bg-white p-4">
+            <h2 className="text-sm font-semibold mb-3">Quick facts</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-gray-500">Contact</div>
+                <div>{contactDisplay}</div>
+              </div>
+
+              <div>
+                <div className="text-gray-500">Area with most voters</div>
                 <div>
-                  <span className="text-gray-600">Name:</span>{" "}
-                  {center.contact?.name || "—"}
-                </div>
-                <div>
-                  <span className="text-gray-600">Phone:</span>{" "}
-                  {center.contact?.phone ? (
-                    <a
-                      className="text-blue-600 underline"
-                      href={`tel:${center.contact.phone}`}
-                    >
-                      {center.contact.phone}
-                    </a>
+                  {areasLoading ? (
+                    "Loading…"
+                  ) : areasErr ? (
+                    <span className="text-red-600">{areasErr}</span>
+                  ) : areaWithMostVoters ? (
+                    <span className="font-medium">
+                      {areaWithMostVoters.name}
+                    </span>
                   ) : (
                     "—"
                   )}
+                  {!areasLoading && !areasErr && areaWithMostVoters && (
+                    <span className="text-gray-600">
+                      {" "}
+                      — {areaWithMostVoters.totalVoters ?? 0} voters
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-500 mb-1">Notes</div>
-            <div className="rounded border p-3 text-sm text-gray-800 bg-white min-h-[56px]">
-              {center.notes || "—"}
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Areas & Highlights */}
-      <section className="rounded border bg-white p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Areas</h2>
-          <div className="text-sm text-gray-600">
-            {areas.length} area{areas.length !== 1 ? "s" : ""} • {totalPeople}{" "}
-            people
-          </div>
-        </div>
-
-        {/* Areas list (compact cards) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {areas.length === 0 && (
-            <div className="text-sm text-gray-500">No areas added yet.</div>
-          )}
-          {areas.map((a) => {
-            const count = a.people?.length || 0;
-            return (
-              <div key={a._id} className="border rounded p-3">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <div className="font-medium text-gray-900 truncate">
-                      {a.name}
-                      {a.code ? ` (${a.code})` : ""}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {count} person{count !== 1 ? "s" : ""} • Total:{" "}
-                      {a.totalVoters ?? 0}, M: {a.maleVoters ?? 0}, F:{" "}
-                      {a.femaleVoters ?? 0}
-                    </div>
-                  </div>
+              {center.notes ? (
+                <div className="md:col-span-2">
+                  <div className="text-gray-500">Notes</div>
+                  <div>{center.notes}</div>
                 </div>
+              ) : null}
+            </div>
+          </section>
 
-                {/* A few people preview */}
-                {!!count && (
-                  <div className="mt-2 text-sm">
-                    <ul className="space-y-1">
-                      {a.people.slice(0, 3).map((p) => (
-                        <li
-                          key={p._id}
-                          className="flex items-center justify-between"
-                        >
-                          <span className="truncate">
-                            <span className="font-medium">{p.name}</span>
-                            {p.designation ? (
-                              <span className="text-gray-500">
-                                {" "}
-                                — {p.designation}
-                              </span>
-                            ) : null}
-                          </span>
-                          {p.phone ? (
-                            <a
-                              className="text-blue-600 underline ml-3"
-                              href={`tel:${p.phone}`}
-                            >
-                              Call
-                            </a>
-                          ) : null}
-                        </li>
-                      ))}
-                      {count > 3 && (
-                        <li className="text-xs text-gray-500">
-                          +{count - 3} more…
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
+          {/* Areas & People */}
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">Areas & People</h2>
+            <div className="overflow-x-auto rounded border bg-white">
+              <div className="min-w-[900px]">
+                <CenterAreasPanel center={center} />
               </div>
-            );
-          })}
-        </div>
-      </section>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
 
-function Stat({ label, value, emphasis, sub }) {
+/* --- Small presentational card --- */
+function StatCard({ title, value, accent = "" }) {
   return (
-    <div
-      className={`rounded border p-3 ${
-        emphasis ? "bg-green-50 border-green-200" : "bg-white"
-      }`}
-    >
-      <div className="text-xs text-gray-500">{label}</div>
-      <div
-        className={`mt-1 ${
-          emphasis
-            ? "text-2xl font-bold text-green-700"
-            : sub
-            ? "text-lg font-semibold"
-            : "text-base"
-        }`}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Bar({ label, pct }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs text-gray-600 mb-1">
-        <span>{label}</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="h-2 bg-gray-200 rounded">
-        <div
-          className="h-2 bg-blue-600 rounded"
-          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-        />
-      </div>
+    <div className="rounded border bg-white p-4">
+      <div className="text-xs text-gray-500">{title}</div>
+      <div className={`text-lg font-semibold ${accent}`}>{value ?? 0}</div>
     </div>
   );
 }

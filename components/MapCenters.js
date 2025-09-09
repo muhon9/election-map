@@ -7,7 +7,8 @@ import { useSession } from "next-auth/react";
 import { has } from "@/lib/perm";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
-const containerStyle = { width: "100%", height: "420px" };
+// The actual <GoogleMap> container gets 100% of this wrapper
+const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
 // Minimal style: hide *all* labels and most clutter
 const MINIMAL_MAP_STYLE = [
@@ -77,22 +78,18 @@ export default function MapCenters() {
       setSelectedId(null);
       return;
     }
-    // Only set if that ID exists among loaded centers
     if (centers.some((c) => String(c._id) === selFromUrl)) {
       setSelectedId(selFromUrl);
-    } else {
-      // If not found (e.g., list not loaded yet), leave as-is; another effect run will set it.
-      // Optionally: setSelectedId(null);
     }
   }, [sp, centers]);
 
-  // Keep a memoized selected center
+  // Memo selected
   const selected = useMemo(
     () => centers.find((c) => String(c._id) === String(selectedId)) || null,
     [centers, selectedId]
   );
 
-  // Initial center positioning
+  // Center the map sensibly
   const initialCenter = useMemo(() => {
     if (!centers.length) return { lat: 23.7806, lng: 90.407 }; // Dhaka fallback
     const lat = centers.reduce((a, c) => a + (c.lat || 0), 0) / centers.length;
@@ -100,7 +97,6 @@ export default function MapCenters() {
     return { lat, lng };
   }, [centers]);
 
-  // Fit bounds once map loads and data present
   const onMapLoad = (map) => {
     if (centers.length) {
       const bounds = new window.google.maps.LatLngBounds();
@@ -122,13 +118,11 @@ export default function MapCenters() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  // Clicking a marker -> select + update URL
   function onMarkerClick(id) {
     setSelectedId(id);
     setSelInUrl(id);
   }
 
-  // Clicking blank map clears selection + URL
   function clearSelection() {
     setSelectedId(null);
     setSelInUrl(null);
@@ -148,19 +142,22 @@ export default function MapCenters() {
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
           transform: translateY(-6px);
           pointer-events: none; /* keep clicks on marker, not label */
-          color: #111827; /* gray-900 */
+          color: #111827;
           font-weight: 600;
         }
         .marker-badge--selected {
-          border-color: rgba(16, 185, 129, 0.25); /* green-500-ish */
+          border-color: rgba(16, 185, 129, 0.25);
           box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
         }
       `}</style>
 
-      <div className="rounded border overflow-hidden">
+      {/* Map wrapper with responsive height:
+         - mobile: ~55vh
+         - md+: 420px */}
+      <div className="rounded border overflow-hidden h-[55vh] md:h-[420px]">
         {isLoaded && (
           <GoogleMap
-            mapContainerStyle={containerStyle}
+            mapContainerStyle={MAP_CONTAINER_STYLE}
             center={initialCenter}
             zoom={12}
             onLoad={onMapLoad}
@@ -208,85 +205,196 @@ export default function MapCenters() {
         )}
       </div>
 
-      {/* Details panel under the map */}
-      <div className="rounded border bg-white p-4">
-        {!selected ? (
-          <div className="text-sm text-gray-600">
-            {centers.length} centers found. Tap a marker to see center details.
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-            {/* Center Name */}
-            <div className="md:col-span-2 flex items-center justify-between gap-3">
-              <div className="text-lg font-semibold text-gray-800">
-                {selected.name}
-              </div>
-              <div className="flex items-center gap-3">
-                {/* Details page */}
-                <a
-                  className="text-gray-700 underline"
-                  href={`/centers/${selected._id}`}
-                >
-                  See details
-                </a>
-                {/* Edit (RBAC) */}
-                {canEdit && (
-                  <a
-                    className="inline-flex items-center px-3 py-1.5 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
-                    href={`/centers/${selected._id}/edit`}
-                  >
-                    Edit
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Address */}
-            <div>
-              <span className="text-gray-500">Address:</span>{" "}
-              {selected.address || "—"}
-            </div>
-
-            {/* Voters summary */}
-            <div className="md:col-span-2 mt-2">
-              <span className="text-gray-500">Total voters:</span>{" "}
-              <span className="text-md font-bold text-green-700">
-                {selected.totalVoters ?? 0}
+      {/* Details panel */}
+      {/* Mobile: collapsible; Desktop: open card */}
+      <div className="rounded border bg-white">
+        {/* MOBILE COLLAPSIBLE */}
+        <div className="md:hidden">
+          <details open={!!selected}>
+            <summary className="list-none p-3 border-b cursor-pointer flex items-center justify-between">
+              <span className="font-medium">
+                {selected ? selected.name : `${centers.length} centers`}
               </span>
-              <div className="ml-4 mt-1 text-sm text-gray-700">
-                <div>Male voters: {selected.maleVoters ?? 0}</div>
-                <div>Female voters: {selected.femaleVoters ?? 0}</div>
-              </div>
-            </div>
+              <span className="text-sm text-gray-500">Details</span>
+            </summary>
 
-            {/* Notes (optional) */}
-            {selected.notes && (
-              <div className="md:col-span-2">
-                <span className="text-gray-500">Notes:</span> {selected.notes}
-              </div>
-            )}
-
-            {/* Areas & People (lazy; handled inside this component) */}
-            <div className="md:col-span-2 mt-4">
-              <h3 className="text-base font-semibold mb-2">Areas & People</h3>
-              {/* Pass the selected center to your panel that fetches areas and shows People (committee/renowned/contacts) */}
-              <CenterAreasPanel center={selected} />
+            <div className="p-3 space-y-3">
+              {!selected ? (
+                <div className="text-sm text-gray-600">
+                  Tap a marker to see center details.
+                </div>
+              ) : (
+                <MobileDetails
+                  selected={selected}
+                  canEdit={canEdit}
+                  clearSelection={clearSelection}
+                />
+              )}
             </div>
+          </details>
+        </div>
 
-            {/* Footer links */}
-            <div className="md:col-span-2 mt-2">
-              <a className="text-gray-600 underline mr-3" href={`/centers`}>
-                All centers
-              </a>
-              <button
-                className="text-gray-600 hover:underline"
-                onClick={clearSelection}
-              >
-                Clear selection
-              </button>
+        {/* DESKTOP OPEN CARD */}
+        <div className="hidden md:block p-4">
+          {!selected ? (
+            <div className="text-sm text-gray-600">
+              {centers.length} centers found. Tap a marker to see center
+              details.
             </div>
-          </div>
-        )}
+          ) : (
+            <DesktopDetails
+              selected={selected}
+              canEdit={canEdit}
+              clearSelection={clearSelection}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== Subcomponents for clarity ===== */
+
+function DesktopDetails({ selected, canEdit, clearSelection }) {
+  return (
+    <div className="grid md:grid-cols-2 gap-y-1 gap-x-6 text-sm">
+      {/* Header row */}
+      <div className="md:col-span-2 flex items-center justify-between gap-3">
+        <div className="text-lg font-semibold text-gray-800">
+          {selected.name}
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            className="text-gray-700 underline"
+            href={`/centers/${selected._id}`}
+          >
+            See details
+          </a>
+          {canEdit && (
+            <a
+              className="inline-flex items-center px-3 py-1.5 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+              href={`/centers/${selected._id}/edit`}
+            >
+              Edit
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Address */}
+      <div>
+        <span className="text-gray-500">Address:</span>{" "}
+        {selected.address || "—"}
+      </div>
+
+      {/* Voters summary */}
+      <div className="md:col-span-2 mt-2">
+        <span className="text-gray-500">Total voters:</span>{" "}
+        <span className="text-md font-bold text-green-700">
+          {selected.totalVoters ?? 0}
+        </span>
+        <div className="ml-4 mt-1 text-sm text-gray-700">
+          <div>Male voters: {selected.maleVoters ?? 0}</div>
+          <div>Female voters: {selected.femaleVoters ?? 0}</div>
+        </div>
+      </div>
+
+      {/* Notes */}
+      {selected.notes && (
+        <div className="md:col-span-2">
+          <span className="text-gray-500">Notes:</span> {selected.notes}
+        </div>
+      )}
+
+      {/* Areas & People */}
+      <div className="md:col-span-2 mt-4">
+        <h3 className="text-base font-semibold mb-2">Areas & People</h3>
+        <CenterAreasPanel center={selected} />
+      </div>
+
+      {/* Footer */}
+      <div className="md:col-span-2 mt-2">
+        <a className="text-gray-600 underline mr-3" href={`/centers`}>
+          All centers
+        </a>
+        <button
+          className="text-gray-600 hover:underline"
+          onClick={clearSelection}
+        >
+          Clear selection
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MobileDetails({ selected, canEdit, clearSelection }) {
+  return (
+    <div className="space-y-4">
+      {/* Header actions */}
+      <div className="flex items-center justify-between text-sm">
+        <div className="font-semibold">{selected.name}</div>
+        <div className="flex items-center gap-3">
+          <a
+            className="text-gray-700 underline"
+            href={`/centers/${selected._id}`}
+          >
+            Details
+          </a>
+          {canEdit && (
+            <a
+              className="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+              href={`/centers/${selected._id}/edit`}
+            >
+              Edit
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Address */}
+      <div className="text-sm">
+        <span className="text-gray-500">Address:</span>{" "}
+        {selected.address || "—"}
+      </div>
+
+      {/* Voters summary */}
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div>
+          <span className="text-gray-500">Total:</span>{" "}
+          <span className="font-semibold text-green-700">
+            {selected.totalVoters ?? 0}
+          </span>
+        </div>
+        <div className="text-gray-700">M: {selected.maleVoters ?? 0}</div>
+        <div className="text-gray-700">F: {selected.femaleVoters ?? 0}</div>
+      </div>
+
+      {/* Notes */}
+      {selected.notes && (
+        <div className="text-sm">
+          <span className="text-gray-500">Notes:</span> {selected.notes}
+        </div>
+      )}
+
+      {/* Areas & People */}
+      <div>
+        <h3 className="text-sm font-semibold mb-2">Areas & People</h3>
+        <CenterAreasPanel center={selected} />
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between">
+        <a className="text-gray-600 underline" href={`/centers`}>
+          All centers
+        </a>
+        <button
+          className="text-gray-600 hover:underline"
+          onClick={clearSelection}
+        >
+          Clear
+        </button>
       </div>
     </div>
   );

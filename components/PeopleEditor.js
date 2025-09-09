@@ -10,14 +10,28 @@ const TABS = [
   { key: "CONTACT", label: "Contacts" },
 ];
 
-export default function PeopleEditor({ areaId }) {
+export default function PeopleEditor({ areaId, defaultCategory }) {
   const { data: session } = useSession();
   const user = session?.user;
   const canView = has(user, "view_centers");
   const canEdit = has(user, "edit_center");
   const canDelete = has(user, "delete_center");
 
-  const [tab, setTab] = useState("COMMITTEE");
+  // tab now can be controlled by parent via defaultCategory
+  const initialTab = TABS.some((t) => t.key === defaultCategory)
+    ? defaultCategory
+    : "COMMITTEE";
+  const [tab, setTab] = useState(initialTab);
+
+  // keep tab in sync if parent changes defaultCategory
+  useEffect(() => {
+    if (
+      TABS.some((t) => t.key === defaultCategory) &&
+      defaultCategory !== tab
+    ) {
+      setTab(defaultCategory);
+    }
+  }, [defaultCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // list state
   const [q, setQ] = useState("");
