@@ -31,7 +31,7 @@ export default function CenterAreasPanel({ center }) {
     try {
       // Pull first 200 to keep things simple. Adjust if you expect more.
       const res = await fetch(
-        `/api/centers/${cid}/areas?page=1&limit=200&sort=createdAt&dir=desc`,
+        `/api/centers/${cid}/areas?page=1&limit=200&sort=totalVoters&dir=desc`,
         { cache: "no-store" }
       );
       const j = await res.json();
@@ -50,13 +50,13 @@ export default function CenterAreasPanel({ center }) {
   }
 
   return (
-    <div className="rounded border overflow-hidden bg-white">
+    <div className="rounded border overflow-scroll bg-white">
       <table className="min-w-[900px] w-full text-sm">
         <thead className="bg-gray-100">
           <tr>
             <th className="text-left p-2 w-[42px]"> </th>
             <th className="text-left p-2">Area</th>
-            <th className="text-left p-2">Code</th>
+            {/* <th className="text-left p-2">Code</th> */}
             <th className="text-left p-2">Voters</th>
             <th className="text-left p-2 w-[240px]">Actions</th>
           </tr>
@@ -182,7 +182,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
           </button>
         </td>
         <td className="p-2 font-medium">{area.name}</td>
-        <td className="p-2">{area.code || "—"}</td>
+        {/* <td className="p-2">{area.code || "—"}</td> */}
         <td className="p-2">
           <span className="font-semibold">{area.totalVoters ?? 0}</span>
           <span className="text-gray-500 ml-2">M:</span> {area.maleVoters ?? 0}

@@ -189,7 +189,7 @@ export default function AreaList({ centerId }) {
               required
             />
           </div>
-          <div>
+          {/* <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Code (optional)
             </label>
@@ -198,7 +198,7 @@ export default function AreaList({ centerId }) {
               value={form.code}
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
             />
-          </div>
+          </div> */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Total voters
@@ -310,14 +310,17 @@ export default function AreaList({ centerId }) {
               <Th field="name" sort={sort} dir={dir} onSort={toggleSort}>
                 Name
               </Th>
-              <Th field="code" sort={sort} dir={dir} onSort={toggleSort}>
+              {/* <Th field="code" sort={sort} dir={dir} onSort={toggleSort}>
                 Code
+              </Th> */}
+              {/* <th className="text-left p-2">Total</th> */}
+              <Th field="totalVoters" sort={sort} dir={dir} onSort={toggleSort}>
+                Total
               </Th>
-              <th className="text-left p-2">Total</th>
               <th className="text-left p-2">M/F</th>
-              <Th field="createdAt" sort={sort} dir={dir} onSort={toggleSort}>
+              {/* <Th field="createdAt" sort={sort} dir={dir} onSort={toggleSort}>
                 Created
-              </Th>
+              </Th> */}
               <th className="text-left p-2 w-[180px]">Actions</th>
             </tr>
           </thead>
@@ -340,16 +343,16 @@ export default function AreaList({ centerId }) {
               data.items.map((a) => (
                 <tr key={a._id} className="border-t hover:bg-gray-50">
                   <td className="p-2 font-medium">{a.name}</td>
-                  <td className="p-2">{a.code || "—"}</td>
+                  {/* <td className="p-2">{a.code || "—"}</td> */}
                   <td className="p-2">{a.totalVoters ?? 0}</td>
                   <td className="p-2">
                     {a.maleVoters ?? 0} / {a.femaleVoters ?? 0}
                   </td>
-                  <td className="p-2">
+                  {/* <td className="p-2">
                     {a.createdAt
                       ? new Date(a.createdAt).toLocaleDateString()
                       : "—"}
-                  </td>
+                  </td> */}
                   <td className="p-2">
                     <div className="flex items-center gap-2">
                       <a
@@ -359,12 +362,12 @@ export default function AreaList({ centerId }) {
                         Open
                       </a>
                       {canEdit && (
-                        <button
-                          className="px-2 py-1 text-blue-700 border border-blue-200 rounded hover:bg-blue-50"
-                          onClick={() => onEdit(a)}
+                        <a
+                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                          href={`/areas/${a._id}/edit`}
                         >
                           Edit
-                        </button>
+                        </a>
                       )}
                       {canDelete && (
                         <button

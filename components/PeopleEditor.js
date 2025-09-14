@@ -374,7 +374,7 @@ export default function PeopleEditor({ areaId, defaultCategory }) {
                   }
                 />
               </div>
-              <div>
+              {/* <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Order
                 </label>
@@ -387,11 +387,11 @@ export default function PeopleEditor({ areaId, defaultCategory }) {
                     setForm((f) => ({ ...f, order: e.target.value }))
                   }
                 />
-              </div>
+              </div> */}
             </>
           )}
 
-          {tab === "RENOWNED" && (
+          {/* {tab === "RENOWNED" && (
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Importance
@@ -406,7 +406,7 @@ export default function PeopleEditor({ areaId, defaultCategory }) {
                 }
               />
             </div>
-          )}
+          )} */}
 
           <div className="md:col-span-3">
             <label className="block text-xs font-medium text-gray-700 mb-1">

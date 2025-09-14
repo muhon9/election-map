@@ -33,6 +33,7 @@ export const GET = withPermApi(async (req, { params }) => {
 
   const sortMap = {
     name: { name: dir },
+    totalVoters: { totalVoters: dir },
     createdAt: { createdAt: dir },
   };
   const sortStage = sortMap[sort] || sortMap.createdAt;
