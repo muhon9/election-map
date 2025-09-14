@@ -70,7 +70,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
   set.updatedBy = session?.user?.id || null;
 
   const doc = await Center.findByIdAndUpdate(
-    params.id,
+    params.centerId,
     { $set: set },
     { new: true, runValidators: true }
   ).lean();
@@ -86,7 +86,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
 // DELETE /api/centers/:id
 export const DELETE = withPermApi(async (_req, { params }) => {
   await dbConnect();
-  const r = await Center.findByIdAndDelete(params.id);
+  const r = await Center.findByIdAndDelete(params.centerId);
   if (!r) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,

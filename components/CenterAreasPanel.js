@@ -217,7 +217,6 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
                 <div className="text-sm text-gray-600">Loading people…</div>
               )}
               {err && <div className="text-sm text-red-600">{err}</div>}
-
               {/* Committee */}
               <PeopleMiniSection
                 title="Committee"
@@ -256,8 +255,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
                   </li>
                 ))}
               </PeopleMiniSection>
-
-              {/* Important (RENOWNED) */}
+              Important (RENOWNED)
               <PeopleMiniSection
                 title="Important"
                 areaId={area._id}
@@ -301,7 +299,6 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
                   </li>
                 ))}
               </PeopleMiniSection>
-
               {/* Contacts */}
               <PeopleMiniSection
                 title="Contacts"
