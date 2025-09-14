@@ -118,7 +118,17 @@ export default function CentersPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Centers</h1>
+        {has("add_center") && (
+          <button
+            className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+            onClick={() => (window.location.href = "/centers/new")}
+          >
+            New Center
+          </button>
+        )}
+      </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <input
             className="border rounded px-3 py-2 text-sm w-64"
