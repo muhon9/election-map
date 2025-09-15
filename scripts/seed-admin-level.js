@@ -14,7 +14,22 @@ async function main() {
   // scripts/seed-roles-and-admin.js (excerpt)
   await Role.updateOne(
     { name: "super_admin" },
-    { $set: { permissions: ["*"], level: 0, immutable: true } },
+    {
+      $set: {
+        permissions: [
+          "manage_users",
+          "manage_roles",
+          "view_centers",
+          "edit_center",
+          "view_areas",
+          "edit_area",
+          "view_people",
+          "edit_people",
+        ],
+        level: 0,
+        immutable: true,
+      },
+    },
     { upsert: true }
   );
   await Role.updateOne(
