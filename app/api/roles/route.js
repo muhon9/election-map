@@ -44,7 +44,7 @@ export const GET = withPermApi(async (req, { params }, session) => {
     pageSize: limit,
     pages: Math.max(1, Math.ceil(total / limit)),
   });
-}, "manage_roles");
+}, "manage_users");
 
 // POST /api/roles
 // body: { name: string, permissions: string[], level: number }
