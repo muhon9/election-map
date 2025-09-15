@@ -5,14 +5,15 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import UserBadge from "@/components/UserBadge";
 
-
 export default function DashboardShell({ children, showAdmin }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   const nav = [
@@ -20,11 +21,13 @@ export default function DashboardShell({ children, showAdmin }) {
     { href: "/centers", label: "Centers" },
     { href: "/settings", label: "Settings" },
     ...(showAdmin ? [{ href: "/users", label: "Users" }] : []),
+    ...(showAdmin ? [{ href: "/roles", label: "Rules" }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   const NavItem = ({ href, label }) => {
-    const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+    const active =
+      pathname === href || (href !== "/" && pathname.startsWith(href));
     return (
       <Link
         href={href}
@@ -63,14 +66,15 @@ export default function DashboardShell({ children, showAdmin }) {
           <div className="flex items-center gap-2">
             <UserBadge />
           </div>
-          
         </div>
       </header>
 
       {/* Overlay (mobile) */}
       <div
         className={`fixed inset-0 bg-black/40 transition-opacity md:hidden z-40 ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          open
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setOpen(false)}
       />
@@ -99,7 +103,9 @@ export default function DashboardShell({ children, showAdmin }) {
         </div>
 
         <nav className="space-y-1">
-          {nav.map((n) => <NavItem key={n.href} {...n} />)}
+          {nav.map((n) => (
+            <NavItem key={n.href} {...n} />
+          ))}
         </nav>
 
         <div className="mt-6">
