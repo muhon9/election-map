@@ -12,13 +12,16 @@ export default function Sidebar({ showAdmin }) {
   const navItems = [
     { href: "/", label: "Dashboard" },
     { href: "/centers", label: "Centers" },
+    { href: "/mosqs-map", label: "Mosqs Map" },
+    { href: "/mosqs", label: "Mosqs" },
     { href: "/settings", label: "Settings" },
     ...(showAdmin ? [{ href: "/users", label: "Users" }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   const Item = ({ href, label }) => {
-    const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+    const active =
+      pathname === href || (href !== "/" && pathname.startsWith(href));
     return (
       <Link
         href={href}
@@ -37,10 +40,14 @@ export default function Sidebar({ showAdmin }) {
       {/* topbar + hamburger ... (your existing code) */}
 
       {/* drawer/aside ... (your existing code) */}
-      <aside className={`fixed z-50 top-0 left-0 h-full w-72 bg-white border-r p-3`}>
+      <aside
+        className={`fixed z-50 top-0 left-0 h-full w-72 bg-white border-r p-3`}
+      >
         {/* ... header, close button ... */}
         <nav className="space-y-1">
-          {navItems.map((it) => <Item key={it.href} {...it} />)}
+          {navItems.map((it) => (
+            <Item key={it.href} {...it} />
+          ))}
         </nav>
         <div className="mt-6">
           <button

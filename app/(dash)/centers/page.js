@@ -23,7 +23,7 @@ export default function CentersPage() {
   const initLimit = parseInt(sp.get("limit") || "10", 10);
   const initQ = sp.get("q") || "";
   const initSort = sp.get("sort") || "createdAt";
-  const initDir = sp.get("dir") || "desc";
+  const initDir = sp.get("dir") || "asc";
 
   const [page, setPage] = useState(initPage);
   const [limit, setLimit] = useState(initLimit);

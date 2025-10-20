@@ -12,21 +12,28 @@ export const GET = withPermApi(async (req) => {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") || "").toLowerCase();
 
-  // Common filter (expanded)
+  // -------- Common filter (with area-name search) --------
   const q = (searchParams.get("q") || "").trim();
   const filter = {};
   if (q) {
     const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+    // Find centers whose areas (by name) match q
+    const centerIdsFromAreas = await Area.find({ name: rx }).distinct("center");
+
     filter.$or = [
       { name: rx },
       { address: rx },
       { notes: rx },
       { "contact.name": rx },
       { "contact.phone": rx },
+      ...(centerIdsFromAreas.length
+        ? [{ _id: { $in: centerIdsFromAreas } }]
+        : []),
     ];
   }
 
-  // ---- MAP MODE: return full docs (lean) ----
+  // ---- MAP MODE: return full docs ----
   if (mode === "map") {
     const docs = await Center.find(filter).sort({ createdAt: -1 }).lean();
     return Response.json(docs);
@@ -45,7 +52,7 @@ export const GET = withPermApi(async (req) => {
   const sortStage = {};
   if (sortKey === "name") sortStage.name = dirStr;
   else if (sortKey === "totalVoters") sortStage.totalVoters = dirStr;
-  else sortStage.createdAt = dirStr;
+  else sortStage.name = dirStr;
 
   const skip = (page - 1) * limit;
   const total = await Center.countDocuments(filter);

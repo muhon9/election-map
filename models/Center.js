@@ -32,4 +32,12 @@ CenterSchema.index({
   "contact.phone": "text",
 });
 
+// Virtual: areas belonging to this center
+CenterSchema.virtual("areas", {
+  ref: "Area",
+  localField: "_id",
+  foreignField: "center",
+  justOne: false,
+});
+
 export default mongoose.models.Center || mongoose.model("Center", CenterSchema);
