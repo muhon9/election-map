@@ -23,7 +23,7 @@ export const GET = withPermApi(async (_req, { params }) => {
 }, "view_centers");
 
 // PATCH /api/mosqs/:id
-// body: { name?, address?, upazilla?, ward?, contact?, centerId?, areaId?, location?: {lat,lng}? }
+// body: { name?, address?, upazila?, ward?, contact?, centerId?, areaId?, location?: {lat,lng}? }
 export const PATCH = withPermApi(async (req, { params }) => {
   await dbConnect();
   const body = await req.json();
@@ -38,8 +38,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
     address:
       "address" in body ? String(body.address || "").trim() : current.address,
     cityId: "cityId" in body ? body.cityId || null : current.cityId,
-    upazillaId:
-      "upazillaId" in body ? body.upazillaId || null : current.upazillaId,
+    upazilaId: "upazilaId" in body ? body.upazilaId || null : current.upazilaId,
     unionId: "unionId" in body ? body.unionId || null : current.unionId,
     wardId: "wardId" in body ? body.wardId || null : current.wardId,
     contact:
@@ -53,7 +52,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
   try {
     await validateGeoChain({
       cityId: next.cityId,
-      upazillaId: next.upazillaId,
+      upazilaId: next.upazilaId,
       unionId: next.unionId,
       wardId: next.wardId,
     });

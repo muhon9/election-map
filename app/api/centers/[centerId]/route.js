@@ -3,11 +3,12 @@ import { withPermApi } from "@/lib/rbac";
 import Center from "@/models/Center";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
+import { validateGeoChain } from "@/lib/geo-validate";
 
 // GET /api/centers/:id  -> full center document
 export const GET = withPermApi(async (_req, { params }) => {
   await dbConnect();
-  console.log("params:", params.centerId);
+  // console.log("params:", params.centerId);
   const doc = await Center.findById(params.centerId).lean();
   if (!doc) {
     return new Response(JSON.stringify({ error: "Not found" }), {
@@ -21,6 +22,14 @@ export const GET = withPermApi(async (_req, { params }) => {
 export const PATCH = withPermApi(async (req, { params }) => {
   await dbConnect();
   const body = await req.json();
+
+  // Load existing center (needed to merge geo for validation)
+  const existing = await Center.findById(params.centerId).lean();
+  if (!existing) {
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+    });
+  }
 
   // Build a sanitized $set payload
   const set = {};
@@ -65,13 +74,56 @@ export const PATCH = withPermApi(async (req, { params }) => {
   if ("contactName" in body) set["contact.name"] = body.contactName ?? "";
   if ("contactPhone" in body) set["contact.phone"] = body.contactPhone ?? "";
 
+  // ---- GeoUnit references with chain validation ----
+  const hasGeo = ["cityId", "upazilaId", "unionId", "wardId"].some((k) =>
+    Object.prototype.hasOwnProperty.call(body, k)
+  );
+
+  if (hasGeo) {
+    const norm = (v) => (v === "" ? null : v);
+
+    // Merge with existing to keep helper rule "Provide either cityId or upazilaId"
+    const mergedGeo = {
+      cityId: Object.prototype.hasOwnProperty.call(body, "cityId")
+        ? norm(body.cityId)
+        : existing.cityId ?? null,
+      upazilaId: Object.prototype.hasOwnProperty.call(body, "upazilaId")
+        ? norm(body.upazilaId)
+        : existing.upazilaId ?? null,
+      unionId: Object.prototype.hasOwnProperty.call(body, "unionId")
+        ? norm(body.unionId)
+        : existing.unionId ?? null,
+      wardId: Object.prototype.hasOwnProperty.call(body, "wardId")
+        ? norm(body.wardId)
+        : existing.wardId ?? null,
+    };
+
+    try {
+      await validateGeoChain(mergedGeo);
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: 400,
+      });
+    }
+
+    // Only write fields that were explicitly provided
+    if (Object.prototype.hasOwnProperty.call(body, "cityId"))
+      set.cityId = mergedGeo.cityId;
+    if (Object.prototype.hasOwnProperty.call(body, "upazilaId"))
+      set.upazilaId = mergedGeo.upazilaId;
+    if (Object.prototype.hasOwnProperty.call(body, "unionId"))
+      set.unionId = mergedGeo.unionId;
+    if (Object.prototype.hasOwnProperty.call(body, "wardId"))
+      set.wardId = mergedGeo.wardId;
+  }
+
   // Audit
   const session = await getServerSession(authOptions);
   set.updatedBy = session?.user?.id || null;
 
   const doc = await Center.findByIdAndUpdate(
     params.centerId,
-    { $set: set },
+    Object.keys(set).length ? { $set: set } : {},
     { new: true, runValidators: true }
   ).lean();
 

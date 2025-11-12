@@ -43,22 +43,22 @@ async function findUnitByName({ type, name, parentId = null }) {
 /**
  * Resolve chain based on provided names:
  * - City mode: City, Ward (optional)
- * - Upazilla mode: Upazilla (required for this mode), Union (optional), Ward (optional)
+ * - upazila mode: upazila (required for this mode), Union (optional), Ward (optional)
  *
- * Returns { cityId, upazillaId, unionId, wardId } (all ObjectIds or null),
+ * Returns { cityId, upazilaId, unionId, wardId } (all ObjectIds or null),
  * and an array of human-friendly error messages (if any).
  */
 async function resolveGeoFromRow({
   cityName,
-  upazillaName,
+  upazilaName,
   unionName,
   wardName,
 }) {
-  const out = { cityId: null, upazillaId: null, unionId: null, wardId: null };
+  const out = { cityId: null, upazilaId: null, unionId: null, wardId: null };
   const errors = [];
 
   const hasCityPath = !!S(cityName);
-  const hasUpaPath = !!S(upazillaName);
+  const hasUpaPath = !!S(upazilaName);
 
   if (!hasCityPath && !hasUpaPath) {
     // Allow completely unassigned geo (can be changed if you want stricter)
@@ -66,7 +66,7 @@ async function resolveGeoFromRow({
   }
 
   if (hasCityPath && hasUpaPath) {
-    errors.push("Provide either City or Upazilla (not both).");
+    errors.push("Provide either City or upazila (not both).");
     return { out, errors };
   }
 
@@ -102,14 +102,14 @@ async function resolveGeoFromRow({
     return { out, errors };
   }
 
-  // Upazilla mode
+  // upazila mode
   if (hasUpaPath) {
-    const upa = await findUnitByName({ type: "upazilla", name: upazillaName });
+    const upa = await findUnitByName({ type: "upazila", name: upazilaName });
     if (!upa) {
-      errors.push(`Upazilla not found: "${upazillaName}"`);
+      errors.push(`upazila not found: "${upazilaName}"`);
       return { out, errors };
     }
-    out.upazillaId = upa._id;
+    out.upazilaId = upa._id;
 
     let union = null;
     if (S(unionName)) {
@@ -123,7 +123,7 @@ async function resolveGeoFromRow({
         union = await findUnitByName({ type: "union", name: unionName });
         if (!union)
           errors.push(
-            `Union not found under upazilla "${upa.name}": "${unionName}"`
+            `Union not found under upazila "${upa.name}": "${unionName}"`
           );
       }
       if (union) out.unionId = union._id;
@@ -139,7 +139,7 @@ async function resolveGeoFromRow({
           parentId: union._id,
         });
       }
-      // Else try ward directly under upazilla (if your data allows it)
+      // Else try ward directly under upazila (if your data allows it)
       if (!ward) {
         ward = await findUnitByName({
           type: "ward",
@@ -153,7 +153,7 @@ async function resolveGeoFromRow({
         if (!ward) {
           errors.push(
             `Ward not found under ${
-              union ? `union "${union.name}"` : `upazilla "${upa.name}"`
+              union ? `union "${union.name}"` : `upazila "${upa.name}"`
             }: "${wardName}"`
           );
         }
@@ -178,12 +178,12 @@ export const GET = withPermApi(async (req) => {
     });
   }
 
-  // Template with both city and upazilla paths supported.
-  // Only fill ONE path per row (either City or Upazilla+Union).
+  // Template with both city and upazila paths supported.
+  // Only fill ONE path per row (either City or upazila+Union).
   const rows = [
     [
       "City",
-      "Upazilla",
+      "upazila",
       "Union",
       "Ward",
       "Mosqname",
@@ -249,7 +249,7 @@ export const POST = withPermApi(async (req) => {
 
   const parseRow = (r) => {
     const cityName = S(getByKeys(r, ["City"]));
-    const upazillaName = S(getByKeys(r, ["Upazilla"]));
+    const upazilaName = S(getByKeys(r, ["upazila"]));
     const unionName = S(getByKeys(r, ["Union"]));
     const wardName = S(getByKeys(r, ["Ward"]));
     const mosqname = S(getByKeys(r, ["Mosqname", "Mosq name", "Name"]));
@@ -263,7 +263,7 @@ export const POST = withPermApi(async (req) => {
 
     return {
       cityName,
-      upazillaName,
+      upazilaName,
       unionName,
       wardName,
       mosqname,
@@ -291,7 +291,7 @@ export const POST = withPermApi(async (req) => {
     // Resolve geo
     const { out: geo, errors: geoErrs } = await resolveGeoFromRow({
       cityName: row.cityName,
-      upazillaName: row.upazillaName,
+      upazilaName: row.upazilaName,
       unionName: row.unionName,
       wardName: row.wardName,
     });
@@ -306,7 +306,7 @@ export const POST = withPermApi(async (req) => {
       address: row.address,
       contact: row.contact,
       cityId: geo.cityId,
-      upazillaId: geo.upazillaId,
+      upazilaId: geo.upazilaId,
       unionId: geo.unionId,
       wardId: geo.wardId,
       location: { lat: row.lat || 0, lng: row.lng || 0 },

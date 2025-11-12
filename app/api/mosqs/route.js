@@ -12,7 +12,7 @@ export const GET = withPermApi(async (req) => {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
   const cityId = (searchParams.get("cityId") || "").trim();
-  const upazillaId = (searchParams.get("upazillaId") || "").trim();
+  const upazilaId = (searchParams.get("upazilaId") || "").trim();
   const unionId = (searchParams.get("unionId") || "").trim();
   const wardId = (searchParams.get("wardId") || "").trim();
 
@@ -32,7 +32,7 @@ export const GET = withPermApi(async (req) => {
     filter.$or = [
       { name: rx },
       { address: rx },
-      { upazilla: rx },
+      { upazila: rx },
       { ward: rx },
       { contact: rx },
     ];
@@ -40,7 +40,7 @@ export const GET = withPermApi(async (req) => {
   if (centerId) filter.center = centerId;
   if (areaId) filter.area = areaId;
   if (cityId) filter.cityId = cityId;
-  if (upazillaId) filter.upazillaId = upazillaId;
+  if (upazilaId) filter.upazilaId = upazilaId;
   if (unionId) filter.unionId = unionId;
   if (wardId) filter.wardId = wardId;
 
@@ -51,7 +51,7 @@ export const GET = withPermApi(async (req) => {
       .populate("center", "name")
       .populate("area", "name")
       .populate("cityId", "name")
-      .populate("upazillaId", "name")
+      .populate("upazilaId", "name")
       .populate("unionId", "name")
       .populate("wardId", "name")
       .sort({ createdAt: -1 })
@@ -71,7 +71,7 @@ export const GET = withPermApi(async (req) => {
 }, "view_centers"); // or "manage_mosqs"
 
 // POST /api/mosqs
-// body: { name, address?, upazilla?, ward?, contact?, centerId?, areaId?, location?: {lat, lng} }
+// body: { name, address?, upazila?, ward?, contact?, centerId?, areaId?, location?: {lat, lng} }
 // app/api/mosqs/route.js (POST)
 
 export const POST = withPermApi(async (req) => {
@@ -82,7 +82,7 @@ export const POST = withPermApi(async (req) => {
     name: String(body?.name || "").trim(),
     address: String(body?.address || "").trim(),
     cityId: body?.cityId || null,
-    upazillaId: body?.upazillaId || null,
+    upazilaId: body?.upazilaId || null,
     unionId: body?.unionId || null,
     wardId: body?.wardId || null,
     contact: String(body?.contact || "").trim(),
@@ -100,14 +100,14 @@ export const POST = withPermApi(async (req) => {
   // Validate chain
   if (
     payload.cityId ||
-    payload.upazillaId ||
+    payload.upazilaId ||
     payload.unionId ||
     payload.wardId
   ) {
     try {
       await validateGeoChain({
         cityId: payload.cityId,
-        upazillaId: payload.upazillaId,
+        upazilaId: payload.upazilaId,
         unionId: payload.unionId,
         wardId: payload.wardId,
       });

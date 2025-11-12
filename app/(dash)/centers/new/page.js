@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { has } from "@/lib/perm";
 import PeopleEditor from "@/components/PeopleEditor";
@@ -9,7 +9,6 @@ export default function CenterCreatePage() {
   const { data: session } = useSession();
   const user = session?.user;
 
-  const canView = has(user, "view_centers");
   const canEdit = has(user, "edit_center");
   const canDel = has(user, "delete_center");
 
@@ -28,6 +27,126 @@ export default function CenterCreatePage() {
     femaleVoters: "",
     notes: "",
   });
+
+  // -------- Geo admin picks (City or Upazila path) --------
+  const [mode, setMode] = useState("city"); // "city" | "rural"
+
+  // selected IDs
+  const [cityId, setCityId] = useState("");
+  const [cityWardId, setCityWardId] = useState("");
+  const [upazilaId, setUpazilaId] = useState("");
+  const [unionId, setUnionId] = useState("");
+  const [ruralWardId, setRuralWardId] = useState("");
+
+  // options
+  const [cityCorps, setCityCorps] = useState([]);
+  const [cityWards, setCityWards] = useState([]);
+  const [upazilas, setUpazilas] = useState([]);
+  const [unions, setUnions] = useState([]);
+  const [ruralWards, setRuralWards] = useState([]);
+
+  // load base lists on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ccRes, upaRes] = await Promise.all([
+          fetch("/api/geo?type=city_corporation&active=1", {
+            cache: "no-store",
+          }),
+          fetch("/api/geo?type=upazila&active=1", { cache: "no-store" }),
+        ]);
+        const [ccJ, upaJ] = await Promise.all([ccRes.json(), upaRes.json()]);
+        setCityCorps(ccJ.items || []);
+        setUpazilas(upaJ.items || []);
+      } catch (e) {
+        console.error("Load base geo lists failed", e);
+      }
+    })();
+  }, []);
+
+  // when city changes → load city wards, clear rural path
+  useEffect(() => {
+    if (!cityId) {
+      setCityWards([]);
+      setCityWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const r = await fetch(`/api/geo?parentId=${cityId}&active=1`, {
+          cache: "no-store",
+        });
+        const j = await r.json();
+        setCityWards(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    // clear rural path if switching
+    setUpazilaId("");
+    setUnionId("");
+    setRuralWardId("");
+    setMode("city");
+  }, [cityId]);
+
+  // when upazila changes → load unions, clear city path
+  useEffect(() => {
+    if (!upazilaId) {
+      setUnions([]);
+      setUnionId("");
+      setRuralWards([]);
+      setRuralWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const r = await fetch(`/api/geo?parentId=${upazilaId}&active=1`, {
+          cache: "no-store",
+        });
+        const j = await r.json();
+        setUnions(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    // clear city path if switching
+    setCityId("");
+    setCityWardId("");
+    setMode("rural");
+  }, [upazilaId]);
+
+  // when union changes → load rural wards
+  useEffect(() => {
+    if (!unionId) {
+      setRuralWards([]);
+      setRuralWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const r = await fetch(`/api/geo?parentId=${unionId}&active=1`, {
+          cache: "no-store",
+        });
+        const j = await r.json();
+        setRuralWards(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [unionId]);
+
+  function chooseMode(next) {
+    setMode(next);
+    if (next === "city") {
+      setUpazilaId("");
+      setUnionId("");
+      setRuralWardId("");
+    } else {
+      setCityId("");
+      setCityWardId("");
+    }
+  }
+  // -----------------------------------------------------------
 
   // Step 2 — Areas
   const [areas, setAreas] = useState([]);
@@ -65,6 +184,21 @@ export default function CenterCreatePage() {
       notes: (centerForm.notes || "").trim(),
     };
 
+    // attach geo refs based on chosen path
+    if (mode === "city") {
+      payload.cityId = cityId || null;
+      payload.wardId = cityWardId || null; // city ward
+      // clear rural path to be explicit
+      payload.upazilaId = null;
+      payload.unionId = null;
+    } else {
+      payload.upazilaId = upazilaId || null;
+      payload.unionId = unionId || null;
+      payload.wardId = ruralWardId || null; // rural ward
+      // clear city path to be explicit
+      payload.cityId = null;
+    }
+
     // Optional rule: total >= male+female (warn only)
     if (payload.totalVoters < payload.maleVoters + payload.femaleVoters) {
       if (!confirm("Total voters is less than Male + Female. Continue?"))
@@ -78,21 +212,17 @@ export default function CenterCreatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
         alert(j?.error || "Failed to create center");
         return;
       }
-      const created = await res.json();
-      setCenterId(created._id);
-      // Optionally reset the form except name (your choice)
-      // setCenterForm({ ...centerForm, notes: "" });
-      // Load areas (will be empty initially)
-      await loadAreas(created._id);
-      // Scroll to areas section
+      setCenterId(j._id);
+      await loadAreas(j._id);
       setTimeout(() => {
-        const el = document.getElementById("areas-section");
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        document
+          .getElementById("areas-section")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     } finally {
       setSaving(false);
@@ -103,7 +233,6 @@ export default function CenterCreatePage() {
     if (!cId) return;
     setAreasLoading(true);
     try {
-      // Load first page (you can add UI for pagination later if needed)
       const res = await fetch(
         `/api/centers/${cId}/areas?page=1&limit=100&sort=createdAt&dir=desc`,
         { cache: "no-store" }
@@ -131,7 +260,6 @@ export default function CenterCreatePage() {
     };
     if (!payload.name) return alert("Area name is required");
 
-    // Optional consistency warn
     if (payload.totalVoters < payload.maleVoters + payload.femaleVoters) {
       if (!confirm("Area total voters is less than Male + Female. Continue?"))
         return;
@@ -192,6 +320,7 @@ export default function CenterCreatePage() {
             onSubmit={createCenter}
             className="grid grid-cols-1 md:grid-cols-3 gap-4"
           >
+            {/* Core fields */}
             <div className="md:col-span-1">
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Center Name
@@ -339,6 +468,146 @@ export default function CenterCreatePage() {
               />
             </div>
 
+            {/* -------- Administrative Location -------- */}
+            <div className="md:col-span-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium text-gray-700">
+                  Administrative Location
+                </span>
+                <div className="flex items-center gap-1 ml-3">
+                  <button
+                    type="button"
+                    className={`px-2 py-1 border rounded ${
+                      mode === "city"
+                        ? "bg-blue-600 text-white"
+                        : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => chooseMode("city")}
+                    disabled={!!centerId || !canEdit}
+                    title="City Corporation → City Ward"
+                  >
+                    City
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 py-1 border rounded ${
+                      mode === "rural"
+                        ? "bg-blue-600 text-white"
+                        : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => chooseMode("rural")}
+                    disabled={!!centerId || !canEdit}
+                    title="Upazila → Union → Ward"
+                  >
+                    Upazila
+                  </button>
+                </div>
+              </div>
+
+              {/* City path */}
+              {mode === "city" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      City Corporation
+                    </label>
+                    <select
+                      className="border rounded w-full px-3 py-2"
+                      value={cityId}
+                      onChange={(e) => setCityId(e.target.value)}
+                      disabled={!!centerId || !canEdit}
+                    >
+                      <option value="">— Select City Corporation —</option>
+                      {cityCorps.map((x) => (
+                        <option key={x._id} value={x._id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      City Ward
+                    </label>
+                    <select
+                      className="border rounded w-full px-3 py-2"
+                      value={cityWardId}
+                      onChange={(e) => setCityWardId(e.target.value)}
+                      disabled={!cityId || !!centerId || !canEdit}
+                    >
+                      <option value="">— Select City Ward —</option>
+                      {cityWards.map((x) => (
+                        <option key={x._id} value={x._id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Rural path */}
+              {mode === "rural" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Upazila
+                    </label>
+                    <select
+                      className="border rounded w-full px-3 py-2"
+                      value={upazilaId}
+                      onChange={(e) => setUpazilaId(e.target.value)}
+                      disabled={!!centerId || !canEdit}
+                    >
+                      <option value="">— Select Upazila —</option>
+                      {upazilas.map((x) => (
+                        <option key={x._id} value={x._id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Union
+                    </label>
+                    <select
+                      className="border rounded w-full px-3 py-2"
+                      value={unionId}
+                      onChange={(e) => setUnionId(e.target.value)}
+                      disabled={!upazilaId || !!centerId || !canEdit}
+                    >
+                      <option value="">— Select Union —</option>
+                      {unions.map((x) => (
+                        <option key={x._id} value={x._id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Ward (Union)
+                    </label>
+                    <select
+                      className="border rounded w-full px-3 py-2"
+                      value={ruralWardId}
+                      onChange={(e) => setRuralWardId(e.target.value)}
+                      disabled={!unionId || !!centerId || !canEdit}
+                    >
+                      <option value="">— Select Ward —</option>
+                      {ruralWards.map((x) => (
+                        <option key={x._id} value={x._id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* -------- end Geo admin picks -------- */}
+
             <div className="md:col-span-3">
               {!centerId ? (
                 <button
@@ -484,8 +753,8 @@ export default function CenterCreatePage() {
                 )}
                 {!areasLoading &&
                   areas.map((a) => (
-                    <>
-                      <tr key={a._id} className="border-t hover:bg-gray-50">
+                    <Fragment key={a._id}>
+                      <tr className="border-t hover:bg-gray-50">
                         <td className="p-2 font-medium">{a.name}</td>
                         <td className="p-2">{a.code || "—"}</td>
                         <td className="p-2">{a.totalVoters ?? 0}</td>
@@ -524,7 +793,6 @@ export default function CenterCreatePage() {
                         </td>
                       </tr>
 
-                      {/* Inline People editor per area (accordion style) */}
                       {openAreaId === a._id && (
                         <tr>
                           <td colSpan={5} className="p-0">
@@ -537,7 +805,7 @@ export default function CenterCreatePage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))}
               </tbody>
             </table>

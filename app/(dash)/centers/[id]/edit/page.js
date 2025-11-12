@@ -8,6 +8,7 @@ import PeopleEditor from "@/components/PeopleEditor"; // optional if you link in
 export default async function CenterEditPage({ params }) {
   await dbConnect();
   const center = await Center.findById(params.id).lean();
+  console.log("center", center);
   if (!center) return <div className="p-4">Center not found.</div>;
 
   return (

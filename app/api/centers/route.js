@@ -4,6 +4,7 @@ import Center from "@/models/Center";
 import Area from "@/models/Area"; // used only for aggregation lookup
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
+import { validateGeoChain } from "@/lib/geo-validate";
 
 // ---------- GET /api/centers ----------
 export const GET = withPermApi(async (req) => {
@@ -132,8 +133,22 @@ export const POST = withPermApi(async (req) => {
     );
   }
 
-  // Optional integrity rule (soft): allow but warn on client; we don't hard-block here
-  // if (totalVoters < maleVoters + femaleVoters) { ... }
+  // Normalize incoming geo ids ("" -> null)
+  const norm = (v) => (v === "" || v === undefined ? null : v);
+
+  const geo = {
+    cityId: norm(body.cityId) ?? null,
+    upazilaId: norm(body.upazilaId) ?? null,
+    unionId: norm(body.unionId) ?? null,
+    wardId: norm(body.wardId) ?? null,
+  };
+
+  // Validate geo chain (throws if invalid)
+  try {
+    await validateGeoChain(geo);
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 400 });
+  }
 
   // Who created it
   const session = await getServerSession(authOptions);
@@ -152,10 +167,14 @@ export const POST = withPermApi(async (req) => {
     totalVoters,
     maleVoters,
     femaleVoters,
+    // store refs
+    cityId: geo.cityId,
+    upazilaId: geo.upazilaId,
+    unionId: geo.unionId,
+    wardId: geo.wardId,
     createdBy: userId,
     updatedBy: userId,
   });
 
-  // Return created document
   return new Response(JSON.stringify(doc), { status: 201 });
 }, "add_center");

@@ -17,6 +17,34 @@ const CenterSchema = new mongoose.Schema(
       phone: { type: String, default: "" },
     },
 
+    cityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GeoUnit",
+      index: true,
+    }, // type: city_corporation
+    wardId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GeoUnit",
+      index: true,
+    }, // type: city_ward
+
+    // Rural path
+    upazilaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GeoUnit",
+      index: true,
+    }, // type: upazila
+    unionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GeoUnit",
+      index: true,
+    },
+    // ruralWard: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "GeoUnit",
+    //   index: true,
+    // }, // type: rural_ward
+
     notes: { type: String, default: "" },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -24,6 +52,9 @@ const CenterSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+CenterSchema.index({ cityCorp: 1, cityWard: 1 });
+CenterSchema.index({ upazila: 1, union: 1, ruralWard: 1 });
 
 CenterSchema.index({
   name: "text",
