@@ -1,7 +1,6 @@
 // models/Person.js
 import mongoose from "mongoose";
 
-// Now includes CONTACT
 export const PERSON_CATEGORIES = [
   "COMMITTEE",
   "RENOWNED",
@@ -12,8 +11,6 @@ export const PERSON_CATEGORIES = [
 const PersonSchema = new mongoose.Schema(
   {
     // SCOPING
-    // For COMMITTEE / RENOWNED / COMMUNICATE: area is REQUIRED
-    // For CONTACT: area or center may be provided, or both null (global contact)
     area: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Area",
@@ -27,10 +24,18 @@ const PersonSchema = new mongoose.Schema(
       default: null,
     },
 
+    // NEW: link to Committee (one person belongs to one committee)
+    committeeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Committee",
+      index: true,
+      default: null,
+    },
+
     // CORE FIELDS
     name: { type: String, required: true, trim: true, index: true },
     phone: { type: String, trim: true, default: "" },
-    whatsapp: { type: String, trim: true, default: "" }, // optional extra
+    whatsapp: { type: String, trim: true, default: "" },
     email: { type: String, trim: true, default: "" },
     designation: { type: String, trim: true, default: "" },
     importance: { type: Number, default: 0, min: 0, max: 999 },
@@ -42,13 +47,13 @@ const PersonSchema = new mongoose.Schema(
       index: true,
     },
 
-    // COMMITTEE-only helpers
-    committeeName: { type: String, trim: true, default: "" }, // group name
-    position: { type: String, trim: true, default: "" }, // role in committee
-    order: { type: Number, default: 0 }, // sort within committee
+    // COMMITTEE-only helpers (still ok to keep)
+    committeeName: { type: String, trim: true, default: "" }, // optional; can mirror Committee.name
+    position: { type: String, trim: true, default: "" },
+    order: { type: Number, default: 0 },
 
     // CONTACT/COMMUNICATE helpers
-    tags: { type: [String], default: [] }, // e.g. ["press","security"]
+    tags: { type: [String], default: [] },
     notes: { type: String, trim: true, default: "" },
     isFavorite: { type: Boolean, default: false },
 
@@ -58,18 +63,24 @@ const PersonSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Validation: require area for non-CONTACT categories
+// Validation: require area for non-CONTACT,
+// and require committeeId for COMMITTEE persons
 PersonSchema.pre("validate", function (next) {
   if (this.category !== "CONTACT" && !this.area) {
     return next(
       new Error("area is required for COMMITTEE/RENOWNED/COMMUNICATE")
     );
   }
+
+  if (this.category === "COMMITTEE" && !this.committeeId) {
+    return next(new Error("committeeId is required for COMMITTEE persons"));
+  }
+
   next();
 });
 
 // Useful indexes
-PersonSchema.index({ area: 1, category: 1, committeeName: 1, order: 1 });
+PersonSchema.index({ area: 1, category: 1, committeeId: 1, order: 1 });
 PersonSchema.index({ center: 1, category: 1, importance: -1 });
 PersonSchema.index({
   name: "text",

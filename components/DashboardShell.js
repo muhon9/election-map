@@ -19,6 +19,7 @@ export default function DashboardShell({ children, showAdmin }) {
   const nav = [
     { href: "/", label: "Dashboard" },
     { href: "/centers", label: "Centers" },
+    { href: "/committees", label: "Committees" },
     { href: "/mosq-map", label: "Mosq Map" },
     { href: "/mosqs", label: "Mosqs" },
     ...(showAdmin ? [{ href: "/users", label: "Users" }] : []),

@@ -1,0 +1,784 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import UploaderMini from "@/components/UploaderMini";
+
+async function fetchJSON(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export default function CommitteeForm({ committee = null, onSaved }) {
+  const router = useRouter();
+
+  // ---------- Base fields ----------
+  const [form, setForm] = useState({
+    name: committee?.name || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  function u(k, v) {
+    setForm((s) => ({ ...s, [k]: v }));
+  }
+
+  // ---------- Files (attachments) ----------
+  const [files, setFiles] = useState(committee?.files || []);
+  const addFiles = (newOnes) => setFiles((prev) => [...prev, ...newOnes]);
+  const removeFileAt = (idx) =>
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  // ---------- Geography (city / rural) ----------
+
+  const initialMode = committee?.cityId
+    ? "city"
+    : committee?.upazillaId
+    ? "rural"
+    : "city";
+
+  const [mode, setMode] = useState(initialMode);
+
+  const [cityId, setCityId] = useState(committee?.cityId?._id || "");
+  const [cityWardId, setCityWardId] = useState(
+    committee?.cityId ? committee?.wardId?._id || "" : ""
+  );
+
+  const [upazilaId, setUpazilaId] = useState(committee?.upazillaId?._id || "");
+  const [unionId, setUnionId] = useState(committee?.unionId?._id || "");
+  const [ruralWardId, setRuralWardId] = useState(
+    committee?.upazillaId ? committee?.wardId?._id || "" : ""
+  );
+
+  const [cityCorps, setCityCorps] = useState([]);
+  const [cityWards, setCityWards] = useState([]);
+  const [upazilas, setUpazilas] = useState([]);
+  const [unions, setUnions] = useState([]);
+  const [ruralWards, setRuralWards] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cc, upa] = await Promise.all([
+          fetchJSON("/api/geo?type=city_corporation&active=1"),
+          fetchJSON("/api/geo?type=upazilla&active=1"),
+        ]);
+        setCityCorps(cc.items || []);
+        setUpazilas(upa.items || []);
+      } catch (e) {
+        console.error("Failed loading geo top-level", e);
+      }
+    })();
+  }, []);
+
+  // Preload children on edit
+  useEffect(() => {
+    (async () => {
+      try {
+        if (committee?.cityId?._id) {
+          const wards = await fetchJSON(
+            `/api/geo?parentId=${committee.cityId._id}&active=1`
+          );
+          setCityWards(wards.items || []);
+        }
+        if (committee?.upazillaId?._id) {
+          const us = await fetchJSON(
+            `/api/geo?parentId=${committee.upazillaId._id}&active=1`
+          );
+          setUnions(us.items || []);
+        }
+        if (committee?.unionId?._id) {
+          const ws = await fetchJSON(
+            `/api/geo?parentId=${committee.unionId._id}&active=1`
+          );
+          setRuralWards(ws.items || []);
+        }
+      } catch (e) {
+        console.error("Failed preload children", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?._id]);
+
+  // City changed -> load city wards, clear rural path
+  useEffect(() => {
+    if (!cityId) {
+      setCityWards([]);
+      setCityWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${cityId}&active=1`);
+        setCityWards(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    setUpazilaId("");
+    setUnionId("");
+    setRuralWardId("");
+    setMode("city");
+  }, [cityId]);
+
+  // Upazila changed -> load unions, clear city path
+  useEffect(() => {
+    if (!upazilaId) {
+      setUnions([]);
+      setUnionId("");
+      setRuralWards([]);
+      setRuralWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${upazilaId}&active=1`);
+        setUnions(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    setCityId("");
+    setCityWardId("");
+    setMode("rural");
+  }, [upazilaId]);
+
+  // Union changed -> load rural wards
+  useEffect(() => {
+    if (!unionId) {
+      setRuralWards([]);
+      setRuralWardId("");
+      return;
+    }
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${unionId}&active=1`);
+        setRuralWards(j.items || []);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [unionId]);
+
+  function chooseMode(next) {
+    setMode(next);
+    if (next === "city") {
+      setUpazilaId("");
+      setUnionId("");
+      setRuralWardId("");
+    } else {
+      setCityId("");
+      setCityWardId("");
+    }
+  }
+
+  // ---------- Centers (multi-select, populated) ----------
+  const [centerSearch, setCenterSearch] = useState("");
+  const [centerOpts, setCenterOpts] = useState([]);
+
+  const [centers, setCenters] = useState(
+    Array.isArray(committee?.centers)
+      ? committee.centers.map((c) => ({
+          _id: c._id,
+          name: c.name || "",
+        }))
+      : []
+  );
+
+  const centerTimer = useRef(null);
+
+  function doCenterSearch(term) {
+    const q = term ? `?q=${encodeURIComponent(term)}&limit=10` : `?limit=10`;
+    fetchJSON(`/api/centers${q}`)
+      .then((j) => setCenterOpts(j.items || []))
+      .catch(() => setCenterOpts([]));
+  }
+
+  function onCenterInput(e) {
+    const v = e.target.value;
+    setCenterSearch(v);
+    if (centerTimer.current) clearTimeout(centerTimer.current);
+    centerTimer.current = setTimeout(() => doCenterSearch(v), 300);
+  }
+
+  function toggleCenter(c) {
+    setCenters((prev) => {
+      const exists = prev.some((x) => String(x._id) === String(c._id));
+      if (exists) {
+        return prev.filter((x) => String(x._id) !== String(c._id));
+      }
+      return [...prev, { _id: c._id, name: c.name || "" }];
+    });
+  }
+
+  // ---------- Area (single, populated areaId) ----------
+
+  const [areaSearch, setAreaSearch] = useState("");
+
+  // Seed options with populated areaId to show its name even before search
+  const [areaOpts, setAreaOpts] = useState(() => {
+    if (committee?.areaId && typeof committee.areaId === "object") {
+      return [committee.areaId];
+    }
+    return [];
+  });
+
+  const [areaId, setAreaId] = useState(committee?.areaId?._id || "");
+
+  const areaTimer = useRef(null);
+
+  const selectedArea =
+    areaOpts.find((x) => String(x._id) === String(areaId)) || null;
+
+  useEffect(() => {
+    doAreaSearch("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function doAreaSearch(term) {
+    const q = term ? `?q=${encodeURIComponent(term)}&limit=10` : `?limit=10`;
+    fetchJSON(`/api/areas${q}`)
+      .then((j) => {
+        const items = j.items || [];
+        setAreaOpts((prev) => {
+          const all = [...prev];
+          items.forEach((it) => {
+            if (!all.some((x) => String(x._id) === String(it._id))) {
+              all.push(it);
+            }
+          });
+          return all;
+        });
+      })
+      .catch(() => {});
+  }
+
+  function onAreaInput(e) {
+    const v = e.target.value;
+    setAreaSearch(v);
+    if (areaTimer.current) clearTimeout(areaTimer.current);
+    areaTimer.current = setTimeout(() => doAreaSearch(v), 300);
+  }
+
+  // ---------- Bulk import committee persons (Excel) ----------
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importErr, setImportErr] = useState("");
+  const importInputRef = useRef(null);
+
+  async function onImportChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!committee?._id) {
+      alert("Please save the committee first before importing members.");
+      e.target.value = "";
+      return;
+    }
+
+    setImportErr("");
+    setImportResult(null);
+    setImporting(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch(
+        `/api/committees/${committee._id}/import-people`,
+        {
+          method: "POST",
+          body: fd,
+        }
+      );
+
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setImportErr(j?.error || "Failed to import committee members");
+      } else {
+        setImportResult(j);
+      }
+    } catch (err) {
+      console.error(err);
+      setImportErr("Network error during import");
+    } finally {
+      setImporting(false);
+      if (e.target) e.target.value = "";
+    }
+  }
+
+  // ---------- Submit ----------
+  async function onSubmit(e) {
+    e.preventDefault();
+    setErr("");
+    setSaving(true);
+
+    const payload = {
+      name: (form.name || "").trim(),
+      files: files.map((f) => ({
+        url: f.url,
+        filename: f.filename || "",
+        mime: f.mime || "",
+        size: Number(f.size || 0),
+        thumbnailUrl: f.thumbnailUrl || "",
+      })),
+      centers: centers.map((c) => c._id),
+      areaId: areaId || null,
+    };
+
+    if (!payload.name) {
+      setSaving(false);
+      setErr("Committee name is required");
+      return;
+    }
+
+    if (mode === "city") {
+      payload.cityId = cityId || null;
+      payload.upazillaId = null;
+      payload.unionId = null;
+      payload.wardId = cityWardId || null;
+    } else {
+      payload.cityId = null;
+      payload.upazillaId = upazilaId || null;
+      payload.unionId = unionId || null;
+      payload.wardId = ruralWardId || null;
+    }
+
+    try {
+      const url = committee?._id
+        ? `/api/committees/${committee._id}`
+        : `/api/committees`;
+      const method = committee?._id ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+      setSaving(false);
+
+      if (!res.ok) {
+        setErr(j?.error || "Failed to save committee");
+        return;
+      }
+
+      onSaved?.(j);
+      if (committee?._id) {
+        router.refresh();
+      } else {
+        router.push(`/committees/${j._id}`);
+      }
+    } catch (e) {
+      setSaving(false);
+      setErr("Network error");
+    }
+  }
+
+  // ---------- UI ----------
+  return (
+    <form onSubmit={onSubmit} className="rounded border bg-white p-4 space-y-5">
+      {/* Name */}
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Committee Name
+        </label>
+        <input
+          className="w-full border rounded px-3 py-2"
+          value={form.name}
+          onChange={(e) => u("name", e.target.value)}
+          required
+        />
+      </div>
+
+      {/* Administrative Location */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-700">
+            Administrative Location
+          </span>
+          <div className="flex items-center gap-1 ml-3">
+            <button
+              type="button"
+              className={`px-2 py-1 border rounded ${
+                mode === "city" ? "bg-blue-600 text-white" : "hover:bg-gray-50"
+              }`}
+              onClick={() => chooseMode("city")}
+              title="City Corporation → City Ward"
+            >
+              City
+            </button>
+            <button
+              type="button"
+              className={`px-2 py-1 border rounded ${
+                mode === "rural" ? "bg-blue-600 text-white" : "hover:bg-gray-50"
+              }`}
+              onClick={() => chooseMode("rural")}
+              title="Upazila → Union → Ward"
+            >
+              Upazila
+            </button>
+          </div>
+        </div>
+
+        {mode === "city" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                City Corporation
+              </label>
+              <select
+                className="border rounded w-full px-3 py-2"
+                value={cityId}
+                onChange={(e) => setCityId(e.target.value)}
+              >
+                <option value="">— Select City Corporation —</option>
+                {cityCorps.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                City Ward
+              </label>
+              <select
+                className="border rounded w-full px-3 py-2"
+                value={cityWardId}
+                onChange={(e) => setCityWardId(e.target.value)}
+                disabled={!cityId}
+              >
+                <option value="">— Select City Ward —</option>
+                {cityWards.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Upazila
+              </label>
+              <select
+                className="border rounded w-full px-3 py-2"
+                value={upazilaId}
+                onChange={(e) => setUpazilaId(e.target.value)}
+              >
+                <option value="">— Select Upazila —</option>
+                {upazilas.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Union
+              </label>
+              <select
+                className="border rounded w-full px-3 py-2"
+                value={unionId}
+                onChange={(e) => setUnionId(e.target.value)}
+                disabled={!upazilaId}
+              >
+                <option value="">— Select Union —</option>
+                {unions.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Ward (Union)
+              </label>
+              <select
+                className="border rounded w-full px-3 py-2"
+                value={ruralWardId}
+                onChange={(e) => setRuralWardId(e.target.value)}
+                disabled={!unionId}
+              >
+                <option value="">— Select Ward —</option>
+                {ruralWards.map((x) => (
+                  <option key={x._id} value={x._id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Centers (multi) */}
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-gray-700">
+          Attach Centers (search)
+        </label>
+        <div className="flex gap-2">
+          <input
+            className="border rounded px-3 py-2 w-full"
+            placeholder="Type to search centers…"
+            value={centerSearch}
+            onChange={onCenterInput}
+          />
+        </div>
+        {centerOpts.length > 0 && (
+          <div className="border rounded p-2 max-h-56 overflow-auto bg-white">
+            {centerOpts.map((c) => {
+              const active = centers.some(
+                (x) => String(x._id) === String(c._id)
+              );
+              return (
+                <button
+                  key={c._id}
+                  type="button"
+                  className={`w-full text-left px-2 py-1 rounded hover:bg-gray-50 ${
+                    active ? "bg-blue-50" : ""
+                  }`}
+                  onClick={() => toggleCenter(c)}
+                >
+                  <div className="font-medium">{c.name}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {centers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {centers.map((c) => (
+              <span
+                key={c._id}
+                className="inline-flex items-center gap-1 px-2 py-1 border rounded bg-gray-50 text-sm"
+              >
+                {c.name || c._id}
+                <button
+                  type="button"
+                  className="ml-1 text-red-600"
+                  onClick={() => toggleCenter({ _id: c._id })}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Area (single) */}
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-gray-700">
+          Attach Area (search)
+        </label>
+        <div className="flex gap-2">
+          <input
+            className="border rounded px-3 py-2 w-full"
+            placeholder="Type to search areas…"
+            value={areaSearch}
+            onChange={onAreaInput}
+          />
+        </div>
+        {areaOpts.length > 0 && (
+          <div className="border rounded p-2 max-h-56 overflow-auto bg-white">
+            {areaOpts.map((a) => (
+              <button
+                key={a._id}
+                type="button"
+                className={`w-full text-left px-2 py-1 rounded hover:bg-gray-50 ${
+                  String(areaId) === String(a._id) ? "bg-emerald-50" : ""
+                }`}
+                onClick={() => setAreaId(a._id)}
+                title={a.notes || ""}
+              >
+                <div className="font-medium">{a.name}</div>
+                <div className="text-xs text-gray-600">
+                  Code: {a.code || "—"} · Center:{" "}
+                  {a.centerName ||
+                    (a.center && typeof a.center === "object"
+                      ? a.center.name
+                      : a.center) ||
+                    "—"}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {areaId && (
+          <div className="text-sm">
+            Selected Area:{" "}
+            <span className="font-medium">
+              {selectedArea?.name || String(areaId)}
+            </span>{" "}
+            <button
+              type="button"
+              className="text-red-600 ml-1"
+              onClick={() => setAreaId("")}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Attachments */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium">Attachments</h3>
+          <UploaderMini onDone={addFiles} />
+        </div>
+
+        {files.length === 0 ? (
+          <div className="text-sm text-gray-500">No files added yet.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {files.map((f, i) => (
+              <div
+                key={`${f.url}-${i}`}
+                className="border rounded p-3 flex items-center gap-3 bg-gray-50"
+              >
+                <div className="w-16 h-16 flex items-center justify-center overflow-hidden rounded bg-white border">
+                  {f.thumbnailUrl || f.mime?.startsWith("image/") ? (
+                    <img
+                      src={f.thumbnailUrl || f.url}
+                      alt={f.filename || "file"}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs text-gray-500">PDF</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">
+                    {f.filename || f.url?.split("/").pop()}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {f.mime || "file"} ·{" "}
+                    {Math.round(Number(f.size || 0) / 1024 || 0)} KB
+                  </div>
+                  <a
+                    className="text-xs text-blue-600 underline"
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs border rounded px-2 py-1 hover:bg-red-50"
+                  onClick={() => removeFileAt(i)}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Bulk Committee Members (Excel) */}
+      {committee?._id && (
+        <div className="space-y-2 border-t pt-4 mt-4">
+          <h3 className="font-medium">Bulk Committee Members (Excel)</h3>
+          <p className="text-xs text-gray-600">
+            Upload an Excel or CSV file with columns:{" "}
+            <span className="font-mono">name</span>,{" "}
+            <span className="font-mono">position</span>,{" "}
+            <span className="font-mono">order</span>,{" "}
+            <span className="font-mono">mobile</span>. All rows will be linked
+            to this committee.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={onImportChange}
+              className="text-sm"
+              disabled={importing}
+            />
+            {importing && (
+              <span className="text-xs text-gray-600">Importing…</span>
+            )}
+          </div>
+
+          {importErr && (
+            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {importErr}
+            </div>
+          )}
+
+          {importResult && (
+            <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 space-y-1">
+              <div className="font-medium">Import summary</div>
+              {"inserted" in importResult && (
+                <div>Inserted: {importResult.inserted}</div>
+              )}
+              {"updated" in importResult && (
+                <div>Updated: {importResult.updated}</div>
+              )}
+              {"skipped" in importResult && (
+                <div>Skipped: {importResult.skipped}</div>
+              )}
+              {Array.isArray(importResult.errors) &&
+                importResult.errors.length > 0 && (
+                  <div>
+                    Errors: {importResult.errors.length} (showing first few)
+                    <ul className="list-disc ml-4 mt-1">
+                      {importResult.errors.slice(0, 5).map((er, i) => (
+                        <li key={i}>{er}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {err && (
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {err}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+        >
+          {saving
+            ? committee?._id
+              ? "Saving…"
+              : "Creating…"
+            : committee?._id
+            ? "Save Changes"
+            : "Create Committee"}
+        </button>
+        <button
+          type="button"
+          className="border px-4 py-2 rounded"
+          onClick={() =>
+            committee?._id
+              ? router.push(`/committees/${committee._id}`)
+              : router.push(`/committees`)
+          }
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}

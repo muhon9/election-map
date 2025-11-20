@@ -12,6 +12,7 @@ export default function Sidebar({ showAdmin }) {
   const navItems = [
     { href: "/", label: "Dashboard" },
     { href: "/centers", label: "Centers" },
+    { href: "/committees", label: "Committees" },
     { href: "/mosqs-map", label: "Mosqs Map" },
     { href: "/mosqs", label: "Mosqs" },
     { href: "/settings", label: "Settings" },
