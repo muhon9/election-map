@@ -59,7 +59,7 @@ export default function CommitteesPage() {
       try {
         const [cc, upa] = await Promise.all([
           fetchJSON("/api/geo?type=city_corporation&active=1"),
-          fetchJSON("/api/geo?type=upazilla&active=1"),
+          fetchJSON("/api/geo?type=upazila&active=1"),
         ]);
         setCityCorps(cc.items || []);
         setUpazilas(upa.items || []);

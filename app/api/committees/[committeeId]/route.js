@@ -2,6 +2,7 @@
 import dbConnect from "@/lib/db";
 import { withPermApi } from "@/lib/rbac";
 import Committee from "@/models/Committee";
+import Person from "@/models/Person";
 import mongoose from "mongoose";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -150,7 +151,7 @@ export const GET = withPermApi(async (req, { params }) => {
 // ---------- PATCH /api/committees/:committeeId ----------
 export const PATCH = withPermApi(async (req, { params }) => {
   await dbConnect();
-  console.log("patch");
+
   const id = params.committeeId;
   if (!Types.ObjectId.isValid(id)) {
     return new Response(JSON.stringify({ error: "Invalid id" }), {
@@ -160,10 +161,10 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
   const contentType = req.headers.get("content-type") || "";
   const set = {};
-  console.log("content type", contentType);
+
   if (contentType.startsWith("multipart/form-data")) {
     const form = await req.formData();
-    console.log("form", form);
+
     if (form.has("name")) set.name = String(form.get("name") || "").trim();
     if (form.has("notes")) set.notes = String(form.get("notes") || "").trim();
 
@@ -225,7 +226,6 @@ export const PATCH = withPermApi(async (req, { params }) => {
   } else {
     // JSON patch
     const body = await req.json();
-    console.log("boyd", body);
 
     if (typeof body.name === "string") set.name = body.name.trim();
     if (typeof body.notes === "string") set.notes = body.notes.trim();
@@ -312,12 +312,19 @@ export const DELETE = withPermApi(async (req, { params }) => {
     });
   }
 
+  // Delete the committee first
   const doc = await Committee.findByIdAndDelete(id).lean();
-  if (!doc)
+  if (!doc) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
     });
+  }
 
-  // (Optional) you can also unlink or delete local files here if desired
+  // Delete all persons that belong to this committee
+  // (these are your committee members)
+  await Person.deleteMany({ committeeId: doc._id });
+
+  // (Optional) unlink or delete local files attached to the committee here
+
   return new Response(null, { status: 204 });
 }, "delete_center");

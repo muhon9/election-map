@@ -62,7 +62,7 @@ export default function CommitteeForm({ committee = null, onSaved }) {
       try {
         const [cc, upa] = await Promise.all([
           fetchJSON("/api/geo?type=city_corporation&active=1"),
-          fetchJSON("/api/geo?type=upazilla&active=1"),
+          fetchJSON("/api/geo?type=upazila&active=1"),
         ]);
         setCityCorps(cc.items || []);
         setUpazilas(upa.items || []);
@@ -231,11 +231,7 @@ export default function CommitteeForm({ committee = null, onSaved }) {
   const selectedArea =
     areaOpts.find((x) => String(x._id) === String(areaId)) || null;
 
-  useEffect(() => {
-    doAreaSearch("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // NOTE: removed initial auto-fetch; we'll only fetch when user types
   function doAreaSearch(term) {
     const q = term ? `?q=${encodeURIComponent(term)}&limit=10` : `?limit=10`;
     fetchJSON(`/api/areas${q}`)
@@ -258,6 +254,10 @@ export default function CommitteeForm({ committee = null, onSaved }) {
     const v = e.target.value;
     setAreaSearch(v);
     if (areaTimer.current) clearTimeout(areaTimer.current);
+    if (!v.trim()) {
+      // if cleared search, don't fetch / don't show suggestions
+      return;
+    }
     areaTimer.current = setTimeout(() => doAreaSearch(v), 300);
   }
 
@@ -266,6 +266,7 @@ export default function CommitteeForm({ committee = null, onSaved }) {
   const [importResult, setImportResult] = useState(null);
   const [importErr, setImportErr] = useState("");
   const importInputRef = useRef(null);
+  const [pendingFile, setPendingFile] = useState(null); // for confirm step
 
   async function onImportChange(e) {
     const file = e.target.files?.[0];
@@ -279,11 +280,61 @@ export default function CommitteeForm({ committee = null, onSaved }) {
 
     setImportErr("");
     setImportResult(null);
+    setPendingFile(null);
+    setImporting(true);
+
+    try {
+      // First: DRY RUN
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch(
+        `/api/committees/${committee._id}/import-people?dry=1`,
+        {
+          method: "POST",
+          body: fd,
+        }
+      );
+
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setImportErr(j?.error || "Failed to run dry-run import");
+        setImportResult(null);
+        setPendingFile(null);
+      } else {
+        // Store preview + keep file in memory for confirm step
+        setImportResult(j);
+        setPendingFile(file);
+      }
+    } catch (err) {
+      console.error(err);
+      setImportErr("Network error during import");
+      setImportResult(null);
+      setPendingFile(null);
+    } finally {
+      setImporting(false);
+      if (e.target) e.target.value = "";
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!pendingFile) {
+      alert("No file ready to import. Please choose a file again.");
+      return;
+    }
+
+    if (!committee?._id) {
+      alert("Committee is not saved yet.");
+      return;
+    }
+
+    setImportErr("");
     setImporting(true);
 
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", pendingFile);
 
       const res = await fetch(
         `/api/committees/${committee._id}/import-people`,
@@ -299,13 +350,15 @@ export default function CommitteeForm({ committee = null, onSaved }) {
         setImportErr(j?.error || "Failed to import committee members");
       } else {
         setImportResult(j);
+        setPendingFile(null);
+        // optionally refresh to show new people counts etc.
+        router.refresh();
       }
     } catch (err) {
       console.error(err);
       setImportErr("Network error during import");
     } finally {
       setImporting(false);
-      if (e.target) e.target.value = "";
     }
   }
 
@@ -588,7 +641,8 @@ export default function CommitteeForm({ committee = null, onSaved }) {
             onChange={onAreaInput}
           />
         </div>
-        {areaOpts.length > 0 && (
+        {/* Suggestions only after user has typed something */}
+        {areaSearch.trim() && areaOpts.length > 0 && (
           <div className="border rounded p-2 max-h-56 overflow-auto bg-white">
             {areaOpts.map((a) => (
               <button
@@ -709,7 +763,7 @@ export default function CommitteeForm({ committee = null, onSaved }) {
               disabled={importing}
             />
             {importing && (
-              <span className="text-xs text-gray-600">Importing…</span>
+              <span className="text-xs text-gray-600">Processing…</span>
             )}
           </div>
 
@@ -721,7 +775,11 @@ export default function CommitteeForm({ committee = null, onSaved }) {
 
           {importResult && (
             <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 space-y-1">
-              <div className="font-medium">Import summary</div>
+              <div className="font-medium">
+                {importResult.dryRun
+                  ? "Dry-run summary (no data saved yet)"
+                  : "Import summary"}
+              </div>
               {"inserted" in importResult && (
                 <div>Inserted: {importResult.inserted}</div>
               )}
@@ -742,6 +800,22 @@ export default function CommitteeForm({ committee = null, onSaved }) {
                     </ul>
                   </div>
                 )}
+
+              {importResult.dryRun && pendingFile && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-3 py-1.5 rounded border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                    onClick={handleConfirmImport}
+                    disabled={importing}
+                  >
+                    Confirm import
+                  </button>
+                  <span className="ml-2 text-[11px] text-emerald-900/80">
+                    This will apply the above changes to the database.
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>

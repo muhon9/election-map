@@ -16,8 +16,42 @@ function oid(v) {
 
 function normalizePhone(raw) {
   if (!raw) return "";
+
+  // 1) To string & trim
   let s = String(raw).trim();
-  s = s.replace(/[\s-]+/g, "");
+
+  // 2) Remove everything except digits
+  //    (so "+88017-123 45678" -> "8801712345678")
+  s = s.replace(/\D+/g, "");
+
+  if (!s) return "";
+
+  // 3) Handle common Bangladesh patterns
+  //    Canonical form we want to store: 01XXXXXXXXX (11 digits)
+
+  // 0088017XXXXXXXX -> strip leading 0088 -> 01XXXXXXXXX
+  if (s.startsWith("008801") && s.length >= 14) {
+    s = s.slice(4); // remove "0088"
+  }
+
+  // 88017XXXXXXXX -> strip leading 88 -> 01XXXXXXXXX
+  if (s.startsWith("8801") && s.length >= 13) {
+    s = s.slice(2); // remove "88"
+  }
+
+  // If missing leading 0 and looks like mobile (10 digits starting with 1)
+  // 1712345678 -> 01712345678
+  if (s.length === 10 && s[0] === "1") {
+    s = "0" + s;
+  }
+
+  // Now if it's already 11 digits starting with 01, we accept as-is
+  if (s.length === 11 && s.startsWith("01")) {
+    return s;
+  }
+
+  // For any other weird format, just return cleaned digits
+  // (optional: you can return "" instead to force only valid BD mobile)
   return s;
 }
 
@@ -34,9 +68,15 @@ function getCell(obj, keys) {
  * POST /api/committees/:committeeId/import-people
  * Body: multipart/form-data with field "file"
  * Excel/CSV with columns: name, position, order, mobile
+ *
+ * Optional: ?dry=1 or ?dry=true for dry-run (no DB writes)
  */
 export const POST = withPermApi(async (req, { params }) => {
   await dbConnect();
+
+  const url = new URL(req.url);
+  const dryParam = (url.searchParams.get("dry") || "").toLowerCase();
+  const isDry = dryParam === "1" || dryParam === "true" || dryParam === "yes";
 
   const committeeId = oid(params.committeeId);
   if (!committeeId) {
@@ -113,46 +153,72 @@ export const POST = withPermApi(async (req, { params }) => {
     );
   }
 
+  // ---- First pass: parse rows & detect if any non-zero order exists ----
+  const parsedRows = [];
+  let hasNonZeroOrder = false;
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNum = i + 2; // 1-based header row
+    const rowNum = i + 2; // header is row 1
+
+    const rawName = getCell(row, ["name", "Name", "NAME"]);
+    const rawPosition = getCell(row, ["position", "Position", "POSITION"]);
+    const rawOrder = getCell(row, ["order", "Order", "ORDER"]);
+    const rawMobile = getCell(row, [
+      "mobile",
+      "Mobile",
+      "MOBILE",
+      "phone",
+      "Phone",
+    ]);
+
+    const name = String(rawName || "").trim();
+    const position = String(rawPosition || "").trim();
+    const phone = normalizePhone(rawMobile);
+    const parsedOrder = Number(rawOrder || 0);
+    const order = Number.isFinite(parsedOrder) ? parsedOrder : 0;
+
+    if (!name) {
+      skipped++;
+      errors.push(`Row ${rowNum}: Missing name`);
+      continue;
+    }
+
+    if (order > 0) {
+      hasNonZeroOrder = true;
+    }
+
+    parsedRows.push({
+      rowNum,
+      name,
+      position,
+      phone,
+      order, // raw numeric order (may be 0)
+    });
+  }
+
+  // ---- Second pass: apply effective order and upsert persons ----
+  for (let idx = 0; idx < parsedRows.length; idx++) {
+    const { rowNum, name, position, phone, order } = parsedRows[idx];
 
     try {
-      const rawName = getCell(row, ["name", "Name", "NAME"]);
-      const rawPosition = getCell(row, ["position", "Position", "POSITION"]);
-      const rawOrder = getCell(row, ["order", "Order", "ORDER"]);
-      const rawMobile = getCell(row, [
-        "mobile",
-        "Mobile",
-        "MOBILE",
-        "phone",
-        "Phone",
-      ]);
+      // 2️⃣ If *all* orders are 0/empty, assign serial numbers as order.
+      const effectiveOrder = hasNonZeroOrder ? order : idx + 1;
 
-      const name = String(rawName || "").trim();
-      const position = String(rawPosition || "").trim();
-      const order = Number(rawOrder || 0);
-      const phone = normalizePhone(rawMobile);
-
-      if (!name) {
-        skipped++;
-        errors.push(`Row ${rowNum}: Missing name`);
-        continue;
-      }
-
-      // Match within THIS committee.
-      // Prefer committeeId + phone; if no phone, use committeeId + name.
-      let query = { committeeId };
+      // 1️⃣ Only update if a person matched with phone number in that committee
+      let existing = null;
       if (phone) {
-        query.phone = phone;
-      } else {
-        query.name = name;
+        existing = await Person.findOne({ committeeId, phone }).lean(
+          isDry ? true : false
+        );
+        // note: .lean(true) ignored by mongoose; but .lean() only matters if not dry.
+        // We'll just do .findOne normally above and conditionally use .lean() if you prefer.
       }
 
       const updateBase = {
         name,
         position,
-        order: Number.isFinite(order) ? order : 0,
+        order: effectiveOrder,
         category: "COMMITTEE",
         committeeId,
         updatedBy: userId,
@@ -162,26 +228,32 @@ export const POST = withPermApi(async (req, { params }) => {
         updateBase.phone = phone;
       }
 
-      const existing = await Person.findOne(query);
-
       if (existing) {
-        // 🔄 Update fields
-        Object.assign(existing, updateBase);
-
-        // ❌ Ensure area/center are NOT kept for committee category
-        existing.area = undefined;
-        existing.center = undefined;
-
-        await existing.save();
+        // Would update
         updated++;
+
+        if (!isDry) {
+          const doc = await Person.findById(existing._id);
+          if (doc) {
+            Object.assign(doc, updateBase);
+            // ❌ Ensure area/center are NOT kept for committee category
+            doc.area = undefined;
+            doc.center = undefined;
+            await doc.save();
+          }
+        }
       } else {
-        const person = new Person({
-          ...updateBase,
-          // area and center intentionally NOT set here
-          createdBy: userId,
-        });
-        await person.save();
+        // Would insert
         inserted++;
+
+        if (!isDry) {
+          const person = new Person({
+            ...updateBase,
+            // area and center intentionally NOT set here
+            createdBy: userId,
+          });
+          await person.save();
+        }
       }
     } catch (e) {
       console.error(`Row ${rowNum} import error:`, e);
@@ -194,6 +266,7 @@ export const POST = withPermApi(async (req, { params }) => {
 
   return new Response(
     JSON.stringify({
+      dryRun: isDry,
       inserted,
       updated,
       skipped,

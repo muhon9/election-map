@@ -28,7 +28,7 @@ export const GET = withPermApi(async (req) => {
     .lean();
 
   return Response.json({ items });
-}, "view_centers");
+}, "*");
 
 // POST /api/geo
 // body: { type, name, parentId?, code?, sort?, active? }
