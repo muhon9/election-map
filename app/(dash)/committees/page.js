@@ -22,11 +22,9 @@ async function fetchJSON(url) {
 export default function CommitteesPage() {
   const { data: session } = useSession();
   const user = session?.user;
-
-  //   const canView = has(user, "view_center");
-  //   const canAdd = has(user, "add_center");
   const canView = true;
-  const canAdd = true;
+  const canAdd = has(user, "add_center");
+
   const canDelete = has(user, "delete_center");
 
   // ---------- filters ----------

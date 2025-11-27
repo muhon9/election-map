@@ -6,8 +6,8 @@ import mongoose from "mongoose";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { validateGeoChain } from "@/lib/geo-validate";
-import { headers } from "next/headers";
-
+import Center from "@/models/Center"; // ✅ make sure Center is registered
+import Area from "@/models/Area";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
@@ -100,34 +100,52 @@ async function saveLocalFilesFromFormData(form) {
 }
 
 // ---------- GET /api/committees/:committeeId ----------
+// app/api/committees/[committeeId]/route.js
+
 export const GET = withPermApi(async (req, { params }) => {
   await dbConnect();
+
   const id = params.committeeId;
   if (!Types.ObjectId.isValid(id)) {
     return new Response(JSON.stringify({ error: "Invalid id" }), {
       status: 400,
     });
   }
-  const doc = await Committee.findById(id)
+
+  let doc = await Committee.findById(id)
     .populate({
       path: "cityId upazillaId unionId wardId",
-      select: "name", // add more fields if needed
+      select: "name",
     })
     .populate({
       path: "areaId",
-      select: "name ", // and maybe "center" or other fields
+      select: "name", // 👈 we need center id here
     })
     .populate({
       path: "centers",
-      select: "name", // add more fields if needed
+      select: "name",
     })
     .lean();
-  if (!doc)
+
+  if (!doc) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
     });
+  }
+
+  // If doc doesn’t have centers but areaId has a center, fetch that center
+  if (!doc.centers?.length && doc.areaId?.center) {
+    const centerDoc = await Center.findById(doc.areaId.center)
+      .select("name")
+      .lean();
+
+    if (centerDoc) {
+      doc.centers = [centerDoc];
+    }
+  }
+
   return Response.json(doc);
-}, "view_center");
+}, "*");
 
 // ---------- PATCH /api/committees/:committeeId ----------
 export const PATCH = withPermApi(async (req, { params }) => {
@@ -281,7 +299,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
     });
   }
   return Response.json(updated);
-}, "edit_committee");
+}, "edit_center");
 
 // ---------- DELETE /api/committees/:committeeId ----------
 export const DELETE = withPermApi(async (req, { params }) => {

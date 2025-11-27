@@ -3,10 +3,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+
+function usePerms() {
+  const { data } = useSession();
+  const perms = data?.user?.permissions || data?.permissions || []; // adjust if your session shape differs
+  const has = (p) => perms?.includes?.(p);
+  return { perms, has };
+}
 
 export default function ListClient() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  const { has } = usePerms();
 
   // table data
   const [rows, setRows] = useState([]);
@@ -243,12 +253,14 @@ export default function ListClient() {
     <div className="space-y-6 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Mosqs</h1>
-        <Link
-          href="/mosqs/new"
-          className="bg-blue-600 text-white px-3 py-2 rounded"
-        >
-          + Add Mosq
-        </Link>
+        {has("add_center") && (
+          <Link
+            href="/mosqs/new"
+            className="bg-blue-600 text-white px-3 py-2 rounded"
+          >
+            + Add Mosq
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -442,7 +454,7 @@ export default function ListClient() {
                 <Th>Ward</Th>
                 <Th>Contact</Th>
                 <Th>Map</Th>
-                <Th className="text-right">Actions</Th>
+                {has("add_center") && <Th className="text-right">Actions</Th>}
               </tr>
             </thead>
             <tbody>
@@ -478,20 +490,22 @@ export default function ListClient() {
                         )}
                       </Td>
                       <Td right>
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/mosqs/${r._id}`}
-                            className="text-blue-600 underline"
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            className="text-red-600 underline"
-                            onClick={() => onDelete(r._id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        {has("add_center") && (
+                          <div className="flex justify-end gap-2">
+                            <Link
+                              href={`/mosqs/${r._id}`}
+                              className="text-blue-600 underline"
+                            >
+                              Edit
+                            </Link>
+                            <button
+                              className="text-red-600 underline"
+                              onClick={() => onDelete(r._id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </Td>
                     </tr>
                   );

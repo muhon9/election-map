@@ -20,7 +20,7 @@ export const GET = withPermApi(async (_req, { params }) => {
       status: 404,
     });
   return Response.json(doc);
-}, "view_centers");
+}, "*");
 
 // PATCH /api/mosqs/:id
 // body: { name?, address?, upazila?, ward?, contact?, centerId?, areaId?, location?: {lat,lng}? }

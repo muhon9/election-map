@@ -7,7 +7,8 @@ import Committee from "@/models/Committee";
 import mongoose from "mongoose";
 import { validateGeoChain } from "@/lib/geo-validate";
 import Person from "@/models/Person";
-
+import Area from "@/models/Area";
+import Center from "@/models/Center";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
@@ -132,6 +133,7 @@ export const GET = withPermApi(async (req) => {
   const cityId = oid(
     searchParams.get("cityId") || searchParams.get("city_corporation")
   );
+  const areaId = oid(searchParams.get("areaId"));
   const upazillaId = oid(
     searchParams.get("upazillaId") || searchParams.get("upazilla")
   );
@@ -140,23 +142,59 @@ export const GET = withPermApi(async (req) => {
   const centerId = oid(searchParams.get("centerId"));
 
   const match = {};
+  if (areaId) match.areaId = areaId;
   if (cityId) match.cityId = cityId;
   if (upazillaId) match.upazillaId = upazillaId;
   if (unionId) match.unionId = unionId;
   if (wardId) match.wardId = wardId;
-  if (centerId) match.centers = centerId;
+  console.log("ward", wardId);
   if (q) match.$text = { $search: q };
 
-  const cursor = Committee.find(match)
+  // 🔴 IMPORTANT: center filter should also include committees attached only via area
+  if (centerId) {
+    // find all areas under this center
+    const areas = await Area.find({ center: centerId }).select("_id").lean();
+
+    const areaIds = areas.map((a) => a._id);
+
+    if (areaIds.length) {
+      match.$or = [
+        { centers: centerId }, // committees directly linked to center
+        { areaId: { $in: areaIds } }, // committees linked via area belonging to this center
+      ];
+    } else {
+      // no areas for this center, fallback to only direct center match
+      match.centers = centerId;
+    }
+  }
+
+  //if search incluedes wardId we need committees linked via that wardId
+
+  // if (wardId) {
+  //   match.$or = [
+  //     { wardId: wardId }, // committees directly linked to ward
+  //   ];
+  // }
+
+  let cursor = Committee.find(match)
     .sort({
       [q ? "score" : sort]: q ? { $meta: "textScore" } : dir,
       ...(q ? { [sort]: dir } : {}),
     })
     .skip((page - 1) * limit)
     .limit(limit)
+    // populate centers & areaId for display
+    .populate({ path: "centers", select: "name" })
+    .populate({
+      path: "areaId",
+      select: "name center",
+      populate: { path: "center", select: "name" }, // so you can get areaId.center.name
+    })
     .lean();
 
-  if (q) cursor.select({ score: { $meta: "textScore" } });
+  if (q) {
+    cursor = cursor.select({ score: { $meta: "textScore" } });
+  }
 
   const [items, total] = await Promise.all([
     cursor.exec(),
@@ -190,7 +228,7 @@ export const GET = withPermApi(async (req) => {
   }
 
   return Response.json({ page, limit, total, items });
-}, "view_center");
+}, "*");
 
 // ---------- POST /api/committees (create) ----------
 export const POST = withPermApi(async (req) => {

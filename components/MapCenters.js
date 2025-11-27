@@ -21,7 +21,7 @@ const MINIMAL_MAP_STYLE = [
     elementType: "labels.icon",
     stylers: [{ visibility: "off" }],
   },
-  { featureType: "landscape.man_made", stylers: [{ visibility: "off" }] },
+  { featureType: "landscape_man_made", stylers: [{ visibility: "off" }] },
 ];
 
 // Simple SVG pin as data URL; colorizable
@@ -64,7 +64,7 @@ export default function MapCenters() {
       const res = await fetch(`/api/centers?mode=map`, { cache: "no-store" });
       const data = await res.json();
       if (!alive) return;
-      setCenters(Array.isArray(data) ? data : []);
+      setCenters(Array.isArray(data) ? data : data.items || []);
     })();
     return () => {
       alive = false;
@@ -254,6 +254,96 @@ export default function MapCenters() {
   );
 }
 
+/* ===== Hook + panel for related committees ===== */
+
+function useCenterCommittees(centerId) {
+  const [committees, setCommittees] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!centerId) return;
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+        const res = await fetch(
+          `/api/committees?centerId=${centerId}&limit=100&sort=createdAt&dir=desc`,
+          { cache: "no-store" }
+        );
+        const j = await res.json();
+        if (!alive) return;
+
+        if (!res.ok) {
+          throw new Error(j?.error || "Failed to load committees");
+        }
+
+        const items = Array.isArray(j) ? j : j.items || [];
+        setCommittees(items);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e.message || "Failed to load committees");
+        setCommittees([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [centerId]);
+
+  return { committees, loading, err };
+}
+
+function CenterCommitteesPanel({ centerId }) {
+  const { committees, loading, err } = useCenterCommittees(centerId);
+
+  if (!centerId) return null;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-base font-semibold">Related Committees</h3>
+
+      {loading && (
+        <div className="text-sm text-gray-600">Loading committees…</div>
+      )}
+
+      {!loading && err && <div className="text-sm text-red-600">{err}</div>}
+
+      {!loading && !err && committees.length === 0 && (
+        <div className="text-sm text-gray-500">
+          No committees found for this center.
+        </div>
+      )}
+
+      {!loading && !err && committees.length > 0 && (
+        <ul className="text-sm space-y-1">
+          {committees.map((c) => (
+            <li key={c._id} className="flex items-center justify-between gap-2">
+              <a
+                href={`/committees/${c._id}`}
+                className="text-blue-600 hover:underline"
+              >
+                {c.name}
+                {c.peopleCount ? `  (${c.peopleCount} members)` : ""}
+              </a>{" "}
+              {Array.isArray(c.centers) && c.centers.length > 1 && (
+                <span className="text-xs text-gray-500">
+                  {c.centers.length} centers
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ===== Subcomponents for clarity ===== */
 
 function DesktopDetails({ selected, canEdit, clearSelection }) {
@@ -307,10 +397,16 @@ function DesktopDetails({ selected, canEdit, clearSelection }) {
         </div>
       )}
 
-      {/* Areas & People */}
-      <div className="md:col-span-2 mt-4">
-        <h3 className="text-base font-semibold mb-2">Areas & People</h3>
-        <CenterAreasPanel center={selected} />
+      {/* Committees + Areas & People */}
+      <div className="md:col-span-2 mt-4 space-y-4">
+        {/* Related committees (NEW, before Areas & People) */}
+        <CenterCommitteesPanel centerId={selected._id} />
+
+        {/* Areas & People */}
+        <div>
+          <h3 className="text-base font-semibold mb-2">Areas & People</h3>
+          <CenterAreasPanel center={selected} />
+        </div>
       </div>
 
       {/* Footer */}
@@ -377,6 +473,11 @@ function MobileDetails({ selected, canEdit, clearSelection }) {
           <span className="text-gray-500">Notes:</span> {selected.notes}
         </div>
       )}
+
+      {/* Related Committees (NEW, before Areas & People) */}
+      <div>
+        <CenterCommitteesPanel centerId={selected._id} />
+      </div>
 
       {/* Areas & People */}
       <div>

@@ -85,7 +85,11 @@ export const GET = withPermApi(async (req) => {
   query = query.skip((page - 1) * limit).limit(limit);
 
   const [items, total] = await Promise.all([
-    query.lean().exec(),
+    query
+      .populate("area", "name")
+      .populate("committeeId", "name")
+      .lean()
+      .exec(),
     Person.countDocuments(match),
   ]);
 
@@ -95,4 +99,4 @@ export const GET = withPermApi(async (req) => {
     total,
     items,
   });
-}, "view_center");
+}, "*");

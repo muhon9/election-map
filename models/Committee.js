@@ -29,8 +29,8 @@ const CommitteeSchema = new Schema(
     wardId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
 
     // Optional: directly link to specific centers (when applicable)
-    centers: [{ type: Types.ObjectId, ref: "Center" }],
-    areaId: { type: Types.ObjectId, ref: "Area" },
+    centers: [{ type: Types.ObjectId, ref: "Center", default: null }],
+    areaId: { type: Types.ObjectId, ref: "Area", default: null },
 
     // Attachments: PDFs/JPEGs/PNGs of the committee list
     files: { type: [FileSchema], default: [] },

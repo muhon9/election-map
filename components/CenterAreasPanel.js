@@ -56,7 +56,6 @@ export default function CenterAreasPanel({ center }) {
           <tr>
             <th className="text-left p-2 w-[42px]"> </th>
             <th className="text-left p-2">Area</th>
-            {/* <th className="text-left p-2">Code</th> */}
             <th className="text-left p-2">Voters</th>
             <th className="text-left p-2 w-[240px]">Actions</th>
           </tr>
@@ -106,7 +105,9 @@ export default function CenterAreasPanel({ center }) {
 
 function AreaRow({ area, isOpen, onToggle, canEdit }) {
   const [loading, setLoading] = useState(false);
-  const [committee, setCommittee] = useState({
+
+  // ⬇️ Now committees is separate from "people" API
+  const [committees, setCommittees] = useState({
     items: [],
     total: 0,
     loaded: false,
@@ -125,15 +126,16 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    if (committee.loaded && renowned.loaded && contacts.loaded) return;
+    if (committees.loaded && renowned.loaded && contacts.loaded) return;
+
     (async () => {
       setLoading(true);
       setErr("");
       try {
-        // Fetch top N for each category along with totals (your API returns {items,total,...})
+        // Committees linked with this area (via committee.areaId)
         const [c, r, k] = await Promise.all([
           fetch(
-            `/api/areas/${area._id}/people?category=COMMITTEE&limit=${TOP_N}&sort=order&dir=asc`,
+            `/api/committees?areaId=${area._id}&limit=${TOP_N}&sort=createdAt&dir=desc`,
             { cache: "no-store" }
           ).then((r) => r.json()),
           fetch(
@@ -145,7 +147,8 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
             { cache: "no-store" }
           ).then((r) => r.json()),
         ]);
-        setCommittee({
+
+        setCommittees({
           items: c.items || [],
           total: c.total || 0,
           loaded: true,
@@ -162,12 +165,12 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
         });
       } catch (e) {
         console.error(e);
-        setErr("Failed to load people for this area.");
+        setErr("Failed to load people/committees for this area.");
       } finally {
         setLoading(false);
       }
     })();
-  }, [isOpen, area._id, committee.loaded, renowned.loaded, contacts.loaded]);
+  }, [isOpen, area._id, committees.loaded, renowned.loaded, contacts.loaded]);
 
   return (
     <>
@@ -182,7 +185,6 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
           </button>
         </td>
         <td className="p-2 font-medium">{area.name}</td>
-        {/* <td className="p-2">{area.code || "—"}</td> */}
         <td className="p-2">
           <span className="font-semibold">{area.totalVoters ?? 0}</span>
           <span className="text-gray-500 ml-2">M:</span> {area.maleVoters ?? 0}
@@ -213,49 +215,50 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
         <tr>
           <td colSpan={5} className="p-0">
             <div className="border-t bg-gray-50 p-4">
-              {loading && (
-                <div className="text-sm text-gray-600">Loading people…</div>
-              )}
+              {loading && <div className="text-sm text-gray-600">Loading…</div>}
               {err && <div className="text-sm text-red-600">{err}</div>}
-              {/* Committee */}
+
+              {/* Committees linked with this area */}
               <PeopleMiniSection
-                title="Committee"
+                title="Committees"
                 areaId={area._id}
-                data={committee}
+                data={committees}
                 canEdit={canEdit}
-                emptyHint="No committee members yet."
-                viewAllHref={`/areas/${area._id}?tab=COMMITTEE`}
+                emptyHint="No committees yet."
+                viewAllHref={`/committees?areaId=${area._id}`}
               >
-                {committee.items.map((p) => (
+                {committees.items.map((c) => (
                   <li
-                    key={p._id}
+                    key={c._id}
                     className="flex items-center justify-between py-1"
                   >
                     <div className="truncate">
-                      <span className="font-medium">{p.name}</span>
-                      {p.position && (
-                        <span className="text-gray-600"> — {p.position}</span>
-                      )}
-                      {typeof p.order === "number" && (
-                        <span className="text-gray-500"> (#{p.order})</span>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {p.phone ? (
-                        <a
-                          className="text-blue-600 underline"
-                          href={`tel:${p.phone}`}
-                        >
-                          {p.phone}
-                        </a>
-                      ) : (
-                        "—"
+                      <a
+                        href={`/committees/${c._id}`}
+                        className="font-medium text-blue-700 hover:underline"
+                      >
+                        {c.name}
+                      </a>
+                      {typeof c.peopleCount === "number" && (
+                        <span className="text-gray-600">
+                          {" "}
+                          · {c.peopleCount} members
+                        </span>
                       )}
                     </div>
+                    {canEdit && (
+                      <a
+                        href={`/committees/${c._id}/edit`}
+                        className="text-xs text-blue-700 underline ml-2"
+                      >
+                        Edit
+                      </a>
+                    )}
                   </li>
                 ))}
               </PeopleMiniSection>
-              Important (RENOWNED)
+
+              {/* Important (RENOWNED) */}
               <PeopleMiniSection
                 title="Important"
                 areaId={area._id}
@@ -299,6 +302,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
                   </li>
                 ))}
               </PeopleMiniSection>
+
               {/* Contacts */}
               <PeopleMiniSection
                 title="Contacts"
@@ -368,7 +372,11 @@ function PeopleMiniSection({
           {canEdit && (
             <a
               className="px-2 py-1 border rounded hover:bg-gray-50"
-              href={`${viewAllHref}`}
+              href={
+                viewAllHref.startsWith("/committees")
+                  ? `/committees/new?areaId=${areaId}` // for Committees section
+                  : viewAllHref
+              }
             >
               Add
             </a>

@@ -88,4 +88,4 @@ export const GET = withPermApi(async (req) => {
     total,
     items,
   });
-}, "view_centers");
+}, "*");

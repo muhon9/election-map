@@ -9,9 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function MosqsPage() {
   const session = await getServerSession(authOptions);
   const canManage =
-    session?.user?.permissions?.includes("view_centers") ||
-    session?.user?.permissions?.includes("view_centers");
-  if (!canManage) redirect("/");
+    session?.user?.permissions?.includes("edit_centers") ||
+    session?.user?.permissions?.includes("delete_centers");
 
   return <ListClient />;
 }

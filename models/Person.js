@@ -48,7 +48,7 @@ const PersonSchema = new mongoose.Schema(
     },
 
     // COMMITTEE-only helpers (still ok to keep)
-    committeeName: { type: String, trim: true, default: "" }, // optional; can mirror Committee.name
+
     position: { type: String, trim: true, default: "" },
     order: { type: Number, default: 0 },
 
@@ -66,7 +66,11 @@ const PersonSchema = new mongoose.Schema(
 // Validation: require area for non-CONTACT,
 // and require committeeId for COMMITTEE persons
 PersonSchema.pre("validate", function (next) {
-  if (this.category !== "CONTACT" && !this.area) {
+  if (
+    this.category !== "CONTACT" &&
+    this.category !== "COMMITTEE" &&
+    !this.area
+  ) {
     return next(
       new Error("area is required for COMMITTEE/RENOWNED/COMMUNICATE")
     );

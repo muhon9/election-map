@@ -3,8 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light; /* tell browser: use light theme, even if system is dark */
+}
+
+html body {
+  background-color: #f9fafb; /* tailwind gray-50/100 */
+  color: #0f172a; /* slate-900 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,9 +35,9 @@ body {
   background: #ffffff;
   padding: 2px 6px;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;       /* gray-200 */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
-  color: #111827;                   /* gray-900 */
+  border: 1px solid #e5e7eb; /* gray-200 */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  color: #111827; /* gray-900 */
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -42,8 +46,6 @@ body {
 
 /* Emphasize the selected one slightly */
 .marker-badge--selected {
-  border-color: #16a34a;            /* green-600 */
-  box-shadow:
-    0 0 0 1px #16a34a inset,
-    0 1px 2px rgba(0,0,0,0.12);
+  border-color: #16a34a; /* green-600 */
+  box-shadow: 0 0 0 1px #16a34a inset, 0 1px 2px rgba(0, 0, 0, 0.12);
 }

@@ -68,7 +68,7 @@ export const GET = withPermApi(async (req) => {
     pageSize: limit,
     pages: Math.max(1, Math.ceil(total / limit)),
   });
-}, "view_centers"); // or "manage_mosqs"
+}, "*"); // or "manage_mosqs"
 
 // POST /api/mosqs
 // body: { name, address?, upazila?, ward?, contact?, centerId?, areaId?, location?: {lat, lng} }

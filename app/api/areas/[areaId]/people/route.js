@@ -63,7 +63,7 @@ export const GET = withPermApi(async (req, { params }) => {
     pageSize: limit,
     pages: Math.max(1, Math.ceil(total / limit)),
   });
-}, "view_centers");
+}, "*");
 
 // POST /api/areas/:areaId/people
 // body: { category, name, phone?, designation?, importance?, committeeName?, position?, order?, notes?, tags?, whatsapp?, email? }

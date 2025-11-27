@@ -9,14 +9,16 @@ import { validateGeoChain } from "@/lib/geo-validate";
 export const GET = withPermApi(async (_req, { params }) => {
   await dbConnect();
   // console.log("params:", params.centerId);
-  const doc = await Center.findById(params.centerId).lean();
+  const doc = await Center.findById(params.centerId)
+    .populate("cityId upazilaId unionId wardId", "name")
+    .lean();
   if (!doc) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
     });
   }
   return Response.json(doc);
-}, "view_centers");
+}, "*");
 
 // PATCH /api/centers/:id  -> update center
 export const PATCH = withPermApi(async (req, { params }) => {

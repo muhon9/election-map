@@ -21,11 +21,6 @@ export default function CenterDetailsPage() {
   const [err, setErr] = useState("");
   const [areasErr, setAreasErr] = useState("");
 
-  // --- NEW: Committees related to this center / its areas ---
-  const [committees, setCommittees] = useState([]);
-  const [committeesLoading, setCommitteesLoading] = useState(false);
-  const [committeesErr, setCommitteesErr] = useState("");
-
   // Load center
   useEffect(() => {
     let alive = true;
@@ -34,14 +29,11 @@ export default function CenterDetailsPage() {
         setLoading(true);
         setErr("");
         const res = await fetch(`/api/centers/${id}`, { cache: "no-store" });
-        if (!res.ok) {
-          let msg = "Failed to load center";
-          try {
-            const j = await res.json();
-            msg = j?.error || msg;
-          } catch {}
-          throw new Error(msg);
-        }
+        if (!res.ok)
+          throw new Error(
+            (await res.json().catch(() => ({})))?.error ||
+              "Failed to load center"
+          );
         const j = await res.json();
         if (!alive) return;
         setCenter(j || null);
@@ -66,15 +58,15 @@ export default function CenterDetailsPage() {
       try {
         setAreasLoading(true);
         setAreasErr("");
+        // Pull a generous number. If you expect more, add UI pagination & totals later.
         const res = await fetch(
           `/api/centers/${center._id}/areas?page=1&limit=1000&sort=createdAt&dir=desc`,
           { cache: "no-store" }
         );
         const j = await res.json();
         if (!alive) return;
-        if (!res.ok || !Array.isArray(j.items)) {
+        if (!res.ok || !Array.isArray(j.items))
           throw new Error(j?.error || "Failed to load areas");
-        }
         setAreas(j.items);
       } catch (e) {
         if (!alive) return;
@@ -89,56 +81,6 @@ export default function CenterDetailsPage() {
     };
   }, [center?._id]);
 
-  // --- NEW: Load related committees (by center + its areas) ---
-  useEffect(() => {
-    if (!center?._id) return;
-    console.log("centers", center.wardId);
-    // We wait until areas finished loading so we know the full list of areaIds.
-    if (areasLoading) return;
-    const { wardId } = center;
-    let alive = true;
-    (async () => {
-      try {
-        setCommitteesLoading(true);
-        setCommitteesErr("");
-
-        const areaIds = (areas || []).map((a) => a?._id).filter(Boolean);
-
-        const params = new URLSearchParams();
-        params.set("limit", "200"); // enough for one center's committees
-        params.set("centerId", center._id);
-        // console.log("ward", wardId);
-        // params.set("wardId", wardId);
-
-        // Optional: let API accept a CSV of areaIds (you can implement this server-side)
-        if (areaIds.length) {
-          params.set("areaIds", areaIds.join(","));
-        }
-
-        const res = await fetch(`/api/committees?${params.toString()}`, {
-          cache: "no-store",
-        });
-        const j = await res.json();
-        if (!alive) return;
-        if (!res.ok || !Array.isArray(j.items)) {
-          throw new Error(j?.error || "Failed to load committees");
-        }
-
-        setCommittees(j.items);
-      } catch (e) {
-        if (!alive) return;
-        setCommittees([]);
-        setCommitteesErr(e.message || "Failed to load committees");
-      } finally {
-        if (alive) setCommitteesLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [center?._id, areasLoading]); // areas won't change after first load
-
   // Derived stats
   const total = Number(center?.totalVoters ?? 0);
   const male = Number(center?.maleVoters ?? 0);
@@ -150,7 +92,6 @@ export default function CenterDetailsPage() {
     const denom = male + female;
     return denom > 0 ? Math.round((male / denom) * 100) : 0;
   }, [male, female]);
-
   const femalePct = useMemo(() => {
     const denom = male + female;
     return denom > 0 ? Math.round((female / denom) * 100) : 0;
@@ -164,15 +105,6 @@ export default function CenterDetailsPage() {
       if (!acc) return a;
       return tv > Number(acc.totalVoters ?? 0) ? a : acc;
     }, null);
-  }, [areas]);
-
-  // quick lookup map for area names (for committees that are area-scoped)
-  const areaNameById = useMemo(() => {
-    const map = new Map();
-    for (const a of areas || []) {
-      if (a?._id) map.set(String(a._id), a.name || "");
-    }
-    return map;
   }, [areas]);
 
   // little helper: tel link for contact
@@ -225,19 +157,6 @@ export default function CenterDetailsPage() {
           <h1 className="text-xl font-semibold">
             {loading ? "Loading…" : center?.name || "Center"}
           </h1>
-          {center?.cityId != null && (
-            <h2 className="text-lg text-gray-700">
-              City: {center.cityId.name}{" "}
-              {center?.wardId ? `· Ward: ${center.wardId.name}` : ""}
-            </h2>
-          )}
-          {center?.upazilaId != null && (
-            <h2 className="text-sm text-gray-700">
-              Upazila: {center.upazilaId.name}{" "}
-              {center?.unionId ? `· Union: ${center.unionId.name}` : ""}
-              {center?.wardId ? `· Ward: ${center.wardId.name}` : ""}
-            </h2>
-          )}
           {center?.address ? (
             <p className="text-sm text-gray-600">{center.address}</p>
           ) : null}
@@ -289,7 +208,7 @@ export default function CenterDetailsPage() {
                   className="h-3"
                   style={{
                     width: `${malePct}%`,
-                    backgroundColor: "#60a5fa", // blue-400
+                    backgroundColor: "#60a5fa" /* blue-400 */,
                   }}
                 />
               </div>
@@ -303,7 +222,7 @@ export default function CenterDetailsPage() {
                   className="h-3"
                   style={{
                     width: `${femalePct}%`,
-                    backgroundColor: "#f472b6", // pink-400
+                    backgroundColor: "#f472b6" /* pink-400 */,
                   }}
                 />
               </div>
@@ -354,118 +273,6 @@ export default function CenterDetailsPage() {
                 </div>
               ) : null}
             </div>
-          </section>
-
-          {/* NEW: Related Committees */}
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Related Committees</h2>
-
-            {committeesLoading && (
-              <div className="rounded border bg-white p-3 text-sm text-gray-600">
-                Loading committees…
-              </div>
-            )}
-
-            {!committeesLoading && committeesErr && (
-              <div className="rounded border bg-white p-3 text-sm text-red-600">
-                {committeesErr}
-              </div>
-            )}
-
-            {!committeesLoading &&
-              !committeesErr &&
-              (committees.length === 0 ? (
-                <div className="rounded border bg-white p-3 text-sm text-gray-500">
-                  No committees linked to this center or its areas.
-                </div>
-              ) : (
-                <div className="rounded border bg-white overflow-x-auto">
-                  <table className="min-w-[700px] w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left p-2">Name</th>
-                        <th className="text-left p-2">Scope</th>
-                        <th className="text-left p-2">Area</th>
-                        <th className="text-right p-2">People</th>
-                        <th className="text-left p-2">Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {committees.map((c) => {
-                        const updatedAt = c.updatedAt
-                          ? new Date(c.updatedAt).toLocaleString()
-                          : "—";
-
-                        const isCenterLevel = Array.isArray(c.centers)
-                          ? c.centers.some(
-                              (cid) =>
-                                String(
-                                  typeof cid === "object" ? cid._id : cid
-                                ) === String(center._id)
-                            )
-                          : false;
-
-                        const areaId =
-                          typeof c.areaId === "object"
-                            ? c.areaId?._id
-                            : c.areaId;
-                        const areaName =
-                          (typeof c.areaId === "object" && c.areaId?.name) ||
-                          (areaId && areaNameById.get(String(areaId))) ||
-                          "";
-
-                        const scopeBadges = [];
-                        if (isCenterLevel) scopeBadges.push("Center");
-                        if (areaName) scopeBadges.push("Area");
-
-                        const peopleCount =
-                          typeof c.peopleCount === "number"
-                            ? c.peopleCount
-                            : "—";
-
-                        return (
-                          <tr key={c._id} className="border-t hover:bg-gray-50">
-                            <td className="p-2 font-medium">
-                              <a
-                                href={`/committees/${c._id}`}
-                                className="text-blue-600 hover:underline"
-                              >
-                                {c.name || "Untitled"}
-                              </a>
-                            </td>
-                            <td className="p-2">
-                              <div className="flex flex-wrap gap-1">
-                                {scopeBadges.length === 0 && (
-                                  <span className="text-xs text-gray-500">
-                                    —
-                                  </span>
-                                )}
-                                {scopeBadges.map((label) => (
-                                  <span
-                                    key={label}
-                                    className="text-xs px-2 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-700"
-                                  >
-                                    {label}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="p-2">
-                              {areaName || (
-                                <span className="text-xs text-gray-400">—</span>
-                              )}
-                            </td>
-                            <td className="p-2 text-right">{peopleCount}</td>
-                            <td className="p-2 text-xs text-gray-600">
-                              {updatedAt}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
           </section>
 
           {/* Areas & People */}

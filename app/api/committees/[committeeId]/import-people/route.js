@@ -52,8 +52,8 @@ export const POST = withPermApi(async (req, { params }) => {
     });
   }
 
-  // ✅ No error if no areaId – committee can be center-specific or higher-level.
-  // We'll just always set committeeId, and optionally copy area/center if present.
+  // ✅ This importer is for COMMITTEE category.
+  // We will *not* keep area/center on Person; those will be resolved from the Committee.
 
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id ? new Types.ObjectId(session.user.id) : null;
@@ -155,18 +155,9 @@ export const POST = withPermApi(async (req, { params }) => {
         order: Number.isFinite(order) ? order : 0,
         category: "COMMITTEE",
         committeeId,
-        committeeName: committee.name || "",
         updatedBy: userId,
       };
 
-      // Optional: copy areaId / centers if they exist on Committee (for easier filtering later)
-      if (committee.areaId) {
-        updateBase.area = committee.areaId;
-      }
-      if (Array.isArray(committee.centers) && committee.centers.length > 0) {
-        // you can choose to keep only first center or later expand to multi-center persons
-        updateBase.center = committee.centers[0];
-      }
       if (phone) {
         updateBase.phone = phone;
       }
@@ -174,12 +165,19 @@ export const POST = withPermApi(async (req, { params }) => {
       const existing = await Person.findOne(query);
 
       if (existing) {
+        // 🔄 Update fields
         Object.assign(existing, updateBase);
+
+        // ❌ Ensure area/center are NOT kept for committee category
+        existing.area = undefined;
+        existing.center = undefined;
+
         await existing.save();
         updated++;
       } else {
         const person = new Person({
           ...updateBase,
+          // area and center intentionally NOT set here
           createdBy: userId,
         });
         await person.save();

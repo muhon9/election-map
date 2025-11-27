@@ -16,7 +16,7 @@ export const GET = withPermApi(async (_req, { params }) => {
     });
   }
   return Response.json(doc);
-}, "view_centers");
+}, "*");
 
 /**
  * PATCH /api/areas/:id

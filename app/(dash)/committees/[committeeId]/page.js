@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { hasPerm } from "@/lib/rbac";
 
 async function fetchJSON(url) {
   const r = await fetch(url, { cache: "no-store" });
@@ -17,6 +19,8 @@ export default function CommitteeShowPage({ params }) {
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  const canEdit = hasPerm(useSession()?.data, "edit_center");
 
   useEffect(() => {
     if (!committeeId) return;
@@ -124,12 +128,14 @@ export default function CommitteeShowPage({ params }) {
           >
             ← Back to Committees
           </Link>
-          <Link
-            href={`/committees/${committee._id}/edit`}
-            className="text-sm px-3 py-1.5 border rounded bg-blue-600 text-white hover:bg-blue-700"
-          >
-            Edit Committee
-          </Link>
+          {canEdit && (
+            <Link
+              href={`/committees/${committee._id}/edit`}
+              className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Edit Committee
+            </Link>
+          )}
         </div>
       </header>
 
@@ -172,7 +178,7 @@ export default function CommitteeShowPage({ params }) {
           )}
         </div>
 
-        <div className="border rounded bg-white p-3">
+        {/* <div className="border rounded bg-white p-3">
           <h2 className="text-xs font-semibold text-gray-500 mb-1">Meta</h2>
           <dl className="text-xs text-gray-800 space-y-1">
             <div className="flex justify-between">
@@ -192,7 +198,7 @@ export default function CommitteeShowPage({ params }) {
               </dd>
             </div>
           </dl>
-        </div>
+        </div> */}
       </section>
 
       {/* Attachments */}
@@ -261,7 +267,7 @@ export default function CommitteeShowPage({ params }) {
                 <th className="text-left px-2 py-1">Position</th>
                 <th className="text-left px-2 py-1">Mobile</th>
                 <th className="text-left px-2 py-1">Designation</th>
-                <th className="text-left px-2 py-1 w-20">Importance</th>
+                {/* <th className="text-left px-2 py-1 w-20">Importance</th> */}
               </tr>
             </thead>
             <tbody>
@@ -286,7 +292,7 @@ export default function CommitteeShowPage({ params }) {
                     <td className="px-2 py-1 text-xs">
                       {p.designation || "—"}
                     </td>
-                    <td className="px-2 py-1 text-xs">{p.importance ?? 0}</td>
+                    {/* <td className="px-2 py-1 text-xs">{p.importance ?? 0}</td> */}
                   </tr>
                 ))
               )}

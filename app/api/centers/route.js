@@ -95,7 +95,7 @@ export const GET = withPermApi(async (req) => {
     pageSize: limit,
     pages: Math.max(1, Math.ceil(total / limit)),
   });
-}, "view_centers");
+}, "*");
 
 // ---------- POST /api/centers ----------
 export const POST = withPermApi(async (req) => {
