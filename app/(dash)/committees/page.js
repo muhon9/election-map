@@ -411,11 +411,13 @@ export default function CommitteesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Location</th>
-              <th className="text-right p-2">People</th>
+              <th className="text-left p-2">Committee Name</th>
+              <th className="hidden md:block text-left p-2">Location</th>
+              <th className="text-right p-2">Members</th>
 
-              <th className="text-right p-2 w-[200px]">Actions</th>
+              <th className="hidden md:block text-right p-2 w-[200px]">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -450,7 +452,7 @@ export default function CommitteesPage() {
                         {r.name}
                       </Link>
                     </td>
-                    <td className="p-2">
+                    <td className="hidden md:block p-2">
                       <div className="flex flex-wrap gap-1">
                         {r.cityId && (
                           <span className="text-xs px-2 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700">
@@ -476,7 +478,7 @@ export default function CommitteesPage() {
                     </td>
                     <td className="p-2 text-right">{peopleCount}</td>
 
-                    <td className="p-2 text-right space-x-2">
+                    <td className="hidden md:block p-2 text-right space-x-2">
                       <Link
                         href={`/committees/${r._id}`}
                         className="px-2 py-1 border rounded hover:bg-gray-50"
