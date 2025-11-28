@@ -134,8 +134,8 @@ export const GET = withPermApi(async (req) => {
     searchParams.get("cityId") || searchParams.get("city_corporation")
   );
   const areaId = oid(searchParams.get("areaId"));
-  const upazillaId = oid(
-    searchParams.get("upazillaId") || searchParams.get("upazilla")
+  const upazilaId = oid(
+    searchParams.get("upazilaId") || searchParams.get("upazila")
   );
   const unionId = oid(searchParams.get("unionId") || searchParams.get("union"));
   const wardId = oid(searchParams.get("wardId") || searchParams.get("ward"));
@@ -144,7 +144,7 @@ export const GET = withPermApi(async (req) => {
   const match = {};
   if (areaId) match.areaId = areaId;
   if (cityId) match.cityId = cityId;
-  if (upazillaId) match.upazillaId = upazillaId;
+  if (upazilaId) match.upazilaId = upazilaId;
   if (unionId) match.unionId = unionId;
   if (wardId) match.wardId = wardId;
   console.log("ward", wardId);
@@ -257,7 +257,7 @@ export const POST = withPermApi(async (req) => {
 
     // geo ids
     body.cityId = form.get("cityId")?.toString() || null;
-    body.upazillaId = form.get("upazillaId")?.toString() || null;
+    body.upazilaId = form.get("upazilaId")?.toString() || null;
     body.unionId = form.get("unionId")?.toString() || null;
     body.wardId = form.get("wardId")?.toString() || null;
 
@@ -288,7 +288,7 @@ export const POST = withPermApi(async (req) => {
   // geo validation (nullable accepted)
   const geo = {
     cityId: oid(body.cityId),
-    upazillaId: oid(body.upazillaId),
+    upazilaId: oid(body.upazilaId),
     unionId: oid(body.unionId),
     wardId: oid(body.wardId),
   };

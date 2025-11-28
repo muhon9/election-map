@@ -115,7 +115,7 @@ export const GET = withPermApi(async (req, { params }) => {
 
   let doc = await Committee.findById(id)
     .populate({
-      path: "cityId upazillaId unionId wardId",
+      path: "cityId upazilaId unionId wardId",
       select: "name",
     })
     .populate({
@@ -180,14 +180,14 @@ export const PATCH = withPermApi(async (req, { params }) => {
     // geo (validate if any present)
     const geoProvided =
       form.has("cityId") ||
-      form.has("upazillaId") ||
+      form.has("upazilaId") ||
       form.has("unionId") ||
       form.has("wardId");
 
     if (geoProvided) {
       const geo = {
         cityId: oid(form.get("cityId")?.toString() || null),
-        upazillaId: oid(form.get("upazillaId")?.toString() || null),
+        upazilaId: oid(form.get("upazilaId")?.toString() || null),
         unionId: oid(form.get("unionId")?.toString() || null),
         wardId: oid(form.get("wardId")?.toString() || null),
       };
@@ -202,7 +202,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
         );
       }
       set.cityId = geo.cityId;
-      set.upazillaId = geo.upazillaId;
+      set.upazilaId = geo.upazilaId;
       set.unionId = geo.unionId;
       set.wardId = geo.wardId;
     }
@@ -242,14 +242,14 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
     const geoProvided =
       "cityId" in body ||
-      "upazillaId" in body ||
+      "upazilaId" in body ||
       "unionId" in body ||
       "wardId" in body;
 
     if (geoProvided) {
       const geo = {
         cityId: oid(body.cityId),
-        upazillaId: oid(body.upazillaId),
+        upazilaId: oid(body.upazilaId),
         unionId: oid(body.unionId),
         wardId: oid(body.wardId),
       };
@@ -264,7 +264,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
         );
       }
       set.cityId = geo.cityId;
-      set.upazillaId = geo.upazillaId;
+      set.upazilaId = geo.upazilaId;
       set.unionId = geo.unionId;
       set.wardId = geo.wardId;
     }

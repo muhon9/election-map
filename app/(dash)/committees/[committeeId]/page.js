@@ -70,11 +70,8 @@ export default function CommitteeShowPage({ params }) {
       if (committee.wardId && typeof committee.wardId === "object") {
         parts.push(`Ward: ${committee.wardId.name}`);
       }
-    } else if (
-      committee.upazillaId &&
-      typeof committee.upazillaId === "object"
-    ) {
-      parts.push(`Upazila: ${committee.upazillaId.name}`);
+    } else if (committee.upazilaId && typeof committee.upazilaId === "object") {
+      parts.push(`Upazila: ${committee.upazilaId.name}`);
       if (committee.unionId && typeof committee.unionId === "object") {
         parts.push(`Union: ${committee.unionId.name}`);
       }
@@ -253,20 +250,20 @@ export default function CommitteeShowPage({ params }) {
           <h2 className="text-sm font-semibold">
             Committee Members ({people.length})
           </h2>
-          <span className="text-xs text-gray-500">
+          {/* <span className="text-xs text-gray-500">
             Source: imported Excel / people linked with this committee
-          </span>
+          </span> */}
         </div>
 
         <div className="border rounded bg-white overflow-x-auto">
-          <table className="min-w-[800px] w-full text-sm">
+          <table className="min-w-[600px] w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-                <th className="text-left px-2 py-1 w-14">Order</th>
+                <th className="text-left px-2 py-1 w-12">Order</th>
                 <th className="text-left px-2 py-1">Name</th>
                 <th className="text-left px-2 py-1">Position</th>
                 <th className="text-left px-2 py-1">Mobile</th>
-                <th className="text-left px-2 py-1">Designation</th>
+                {/* <th className="text-left px-2 py-1">Designation</th> */}
                 {/* <th className="text-left px-2 py-1 w-20">Importance</th> */}
               </tr>
             </thead>
@@ -289,9 +286,9 @@ export default function CommitteeShowPage({ params }) {
                     <td className="px-2 py-1 text-xs font-mono">
                       {p.phone || "—"}
                     </td>
-                    <td className="px-2 py-1 text-xs">
+                    {/* <td className="px-2 py-1 text-xs">
                       {p.designation || "—"}
-                    </td>
+                    </td> */}
                     {/* <td className="px-2 py-1 text-xs">{p.importance ?? 0}</td> */}
                   </tr>
                 ))

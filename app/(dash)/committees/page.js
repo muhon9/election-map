@@ -136,7 +136,7 @@ export default function CommitteesPage() {
       base.cityId = cityId || undefined;
       base.wardId = cityWardId || undefined;
     } else {
-      base.upazillaId = upazilaId || undefined;
+      base.upazilaId = upazilaId || undefined;
       base.unionId = unionId || undefined;
       base.wardId = ruralWardId || undefined;
     }
@@ -459,7 +459,7 @@ export default function CommitteesPage() {
                             City
                           </span>
                         )}
-                        {r.upazillaId && (
+                        {r.upazilaId && (
                           <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-100 text-emerald-700">
                             Upazila
                           </span>

@@ -24,7 +24,7 @@ const CommitteeSchema = new Schema(
 
     // --- Geography (use validateGeoChain() in routes; model stays neutral) ---
     cityId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
-    upazillaId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
+    upazilaId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
     unionId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
     wardId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
 
@@ -53,7 +53,7 @@ const CommitteeSchema = new Schema(
 // Helpful indexes for quick filtering
 CommitteeSchema.index({ name: "text", ocrText: "text" }); // full-text search
 CommitteeSchema.index({ cityId: 1, wardId: 1, createdAt: -1 });
-CommitteeSchema.index({ upazillaId: 1, unionId: 1, wardId: 1, createdAt: -1 });
+CommitteeSchema.index({ upazilaId: 1, unionId: 1, wardId: 1, createdAt: -1 });
 CommitteeSchema.index({ "files.uploadedAt": -1 });
 
 // Ensure only one model is compiled (Next.js hot reload friendly)

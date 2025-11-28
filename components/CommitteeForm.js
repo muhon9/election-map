@@ -34,7 +34,7 @@ export default function CommitteeForm({ committee = null, onSaved }) {
 
   const initialMode = committee?.cityId
     ? "city"
-    : committee?.upazillaId
+    : committee?.upazilaId
     ? "rural"
     : "city";
 
@@ -45,10 +45,10 @@ export default function CommitteeForm({ committee = null, onSaved }) {
     committee?.cityId ? committee?.wardId?._id || "" : ""
   );
 
-  const [upazilaId, setUpazilaId] = useState(committee?.upazillaId?._id || "");
+  const [upazilaId, setUpazilaId] = useState(committee?.upazilaId?._id || "");
   const [unionId, setUnionId] = useState(committee?.unionId?._id || "");
   const [ruralWardId, setRuralWardId] = useState(
-    committee?.upazillaId ? committee?.wardId?._id || "" : ""
+    committee?.upazilaId ? committee?.wardId?._id || "" : ""
   );
 
   const [cityCorps, setCityCorps] = useState([]);
@@ -82,9 +82,9 @@ export default function CommitteeForm({ committee = null, onSaved }) {
           );
           setCityWards(wards.items || []);
         }
-        if (committee?.upazillaId?._id) {
+        if (committee?.upazilaId?._id) {
           const us = await fetchJSON(
-            `/api/geo?parentId=${committee.upazillaId._id}&active=1`
+            `/api/geo?parentId=${committee.upazilaId._id}&active=1`
           );
           setUnions(us.items || []);
         }
@@ -389,12 +389,12 @@ export default function CommitteeForm({ committee = null, onSaved }) {
 
     if (mode === "city") {
       payload.cityId = cityId || null;
-      payload.upazillaId = null;
+      payload.upazilaId = null;
       payload.unionId = null;
       payload.wardId = cityWardId || null;
     } else {
       payload.cityId = null;
-      payload.upazillaId = upazilaId || null;
+      payload.upazilaId = upazilaId || null;
       payload.unionId = unionId || null;
       payload.wardId = ruralWardId || null;
     }
