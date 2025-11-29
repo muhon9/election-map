@@ -142,39 +142,43 @@ export const GET = withPermApi(async (req) => {
   const centerId = oid(searchParams.get("centerId"));
 
   const match = {};
-  if (areaId) match.areaId = areaId;
+  const orConditions = [];
+
   if (cityId) match.cityId = cityId;
   if (upazilaId) match.upazilaId = upazilaId;
   if (unionId) match.unionId = unionId;
   if (wardId) match.wardId = wardId;
-  console.log("ward", wardId);
   if (q) match.$text = { $search: q };
 
-  // 🔴 IMPORTANT: center filter should also include committees attached only via area
-  if (centerId) {
-    // find all areas under this center
-    const areas = await Area.find({ center: centerId }).select("_id").lean();
+  // 🔹 Area filter: committees linked to this area (new areas[] or legacy areaId)
+  if (areaId) {
+    orConditions.push(
+      { areas: areaId }, // new multi-area field
+      { areaId: areaId } // legacy single-area field
+    );
+  }
 
+  // 🔹 Center filter: committees linked directly OR via areas of that center
+  if (centerId) {
+    const areas = await Area.find({ center: centerId }).select("_id").lean();
     const areaIds = areas.map((a) => a._id);
 
     if (areaIds.length) {
-      match.$or = [
-        { centers: centerId }, // committees directly linked to center
-        { areaId: { $in: areaIds } }, // committees linked via area belonging to this center
-      ];
+      orConditions.push(
+        { centers: centerId }, // directly attached to center
+        { areas: { $in: areaIds } }, // any of its areas attached
+        { areaId: { $in: areaIds } } // legacy areaId pointing to those areas
+      );
     } else {
       // no areas for this center, fallback to only direct center match
-      match.centers = centerId;
+      orConditions.push({ centers: centerId });
     }
   }
 
-  //if search incluedes wardId we need committees linked via that wardId
-
-  // if (wardId) {
-  //   match.$or = [
-  //     { wardId: wardId }, // committees directly linked to ward
-  //   ];
-  // }
+  // If we have any OR conditions, attach them to match
+  if (orConditions.length) {
+    match.$or = orConditions;
+  }
 
   let cursor = Committee.find(match)
     .sort({
@@ -183,12 +187,12 @@ export const GET = withPermApi(async (req) => {
     })
     .skip((page - 1) * limit)
     .limit(limit)
-    // populate centers & areaId for display
+    // populate centers & areas for display
     .populate({ path: "centers", select: "name" })
     .populate({
       path: "areas",
       select: "name center",
-      populate: { path: "center", select: "name" }, // so you can get areaId.center.name
+      populate: { path: "center", select: "name" }, // so you can get area.center.name
     })
     .lean();
 
