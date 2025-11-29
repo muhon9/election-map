@@ -17,7 +17,6 @@ export const config = {
     "/mosqs/new",
     "/mosqs/bulk",
     "/geo/:path*",
-    "/persons",
     "/admin/:path*",
     "/change-password",
   ],

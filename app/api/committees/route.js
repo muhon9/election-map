@@ -186,7 +186,7 @@ export const GET = withPermApi(async (req) => {
     // populate centers & areaId for display
     .populate({ path: "centers", select: "name" })
     .populate({
-      path: "areaId",
+      path: "areas",
       select: "name center",
       populate: { path: "center", select: "name" }, // so you can get areaId.center.name
     })
@@ -244,7 +244,7 @@ export const POST = withPermApi(async (req) => {
 
   if (contentType.startsWith("multipart/form-data")) {
     const form = await req.formData();
-    console.log("hello");
+
     // basic fields
     body.name = (form.get("name") || "").toString();
     body.notes = (form.get("notes") || "").toString();
@@ -270,11 +270,22 @@ export const POST = withPermApi(async (req) => {
           .filter(Boolean)
       : [];
 
+    // 🔹 areas (optional, comma-separated) – new multi-areas support
+    const areasStr = form.get("areas")?.toString() || "";
+    body.areas = areasStr
+      ? areasStr
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    // legacy single areaId (if posted from old client)
+    body.areaId = form.get("areaId")?.toString() || null;
+
     // save files locally (same output shape as /api/uploads)
     incomingFiles = await saveLocalFilesFromFormData(form);
   } else {
     body = await req.json();
-
     incomingFiles = sanitizeFiles(body.files); // from /api/uploads response
   }
 
@@ -303,14 +314,33 @@ export const POST = withPermApi(async (req) => {
     );
   }
 
+  // centers
   const centers = Array.isArray(body.centers)
     ? body.centers.map(oid).filter(Boolean)
     : [];
-  // if there is a areaId check if its a mongoose id
-  if (body.areaId && !Types.ObjectId.isValid(body.areaId)) {
-    return new Response(JSON.stringify({ error: "Invalid areaId" }), {
-      status: 400,
-    });
+
+  // 🔹 areas + legacy areaId handling
+  let areas = Array.isArray(body.areas)
+    ? body.areas.map(oid).filter(Boolean)
+    : [];
+
+  let areaId = null;
+
+  if (body.areaId) {
+    if (!Types.ObjectId.isValid(body.areaId)) {
+      return new Response(JSON.stringify({ error: "Invalid areaId" }), {
+        status: 400,
+      });
+    }
+    areaId = oid(body.areaId);
+
+    // if old client only sent areaId (and no areas[]), sync areas from it
+    if (!areas.length && areaId) {
+      areas = [areaId];
+    }
+  } else if (areas.length) {
+    // if only areas[] is provided, keep areaId in sync as first area
+    areaId = areas[0];
   }
 
   const session = await getServerSession(authOptions);
@@ -326,7 +356,9 @@ export const POST = withPermApi(async (req) => {
     },
     ...geo,
     centers,
-    areaId: body.areaId ? oid(body.areaId) : null,
+    // 🔹 new multi-areas + legacy single areaId
+    areas,
+    areaId,
     files: (incomingFiles || []).map((f) => ({
       ...f,
       uploadedBy: f.uploadedBy || userId,

@@ -119,7 +119,7 @@ export const GET = withPermApi(async (req, { params }) => {
       select: "name",
     })
     .populate({
-      path: "areaId",
+      path: "areas",
       select: "name", // 👈 we need center id here
     })
     .populate({
@@ -218,6 +218,21 @@ export const PATCH = withPermApi(async (req, { params }) => {
         : [];
     }
 
+    // areas (comma-separated) – new multi-areas support
+    if (form.has("areas")) {
+      const areasStr = form.get("areas")?.toString() || "";
+      const areas = areasStr
+        ? areasStr
+            .split(",")
+            .map((s) => oid(s.trim()))
+            .filter(Boolean)
+        : [];
+      set.areas = areas;
+
+      // optional: also keep legacy areaId as first area for compatibility
+      set.areaId = areas.length ? areas[0] : null;
+    }
+
     // If files were posted, replace files[] with newly saved ones
     const saved = await saveLocalFilesFromFormData(form);
     if (saved.length) {
@@ -275,9 +290,23 @@ export const PATCH = withPermApi(async (req, { params }) => {
         : [];
       set.centers = centers;
     }
-    //if areaid is present
-    if ("areaId" in body) {
-      set.areaId = body.areaId ? oid(body.areaId) : null;
+
+    // 🔹 NEW: multi-areas support from JSON body
+    if ("areas" in body) {
+      const areas = Array.isArray(body.areas)
+        ? body.areas.map(oid).filter(Boolean)
+        : [];
+      set.areas = areas;
+
+      // optional: also keep legacy areaId as first area for compatibility
+      set.areaId = areas.length ? areas[0] : null;
+    }
+
+    // Legacy support: if only areaId is sent (older clients)
+    if ("areaId" in body && !("areas" in body)) {
+      const a = body.areaId ? oid(body.areaId) : null;
+      set.areaId = a;
+      set.areas = a ? [a] : []; // keep areas in sync
     }
 
     const files = sanitizeFiles(body.files);

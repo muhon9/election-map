@@ -80,10 +80,6 @@ export default function CommitteeShowPage({ params }) {
       }
     }
 
-    if (committee.areaId && typeof committee.areaId === "object") {
-      parts.push(`Area: ${committee.areaId.name}`);
-    }
-
     return parts.join(" · ");
   }, [committee]);
 
@@ -163,6 +159,33 @@ export default function CommitteeShowPage({ params }) {
                   </div>
                   <Link
                     href={`/centers/${c._id}`}
+                    className="text-xs text-blue-600 underline ml-2"
+                  >
+                    Open
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-500">No centers linked.</p>
+          )}
+        </div>
+        <div className="border rounded bg-white p-3">
+          <h2 className="text-xs font-semibold text-gray-500 mb-1">
+            Linked Areas
+          </h2>
+          {Array.isArray(committee.areas) && committee.areas.length > 0 ? (
+            <ul className="text-sm text-gray-800 space-y-1">
+              {committee.areas.map((c) => (
+                <li key={c._id} className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{c.name}</div>
+                    <div className="text-xs text-gray-600">
+                      {c.address || "—"}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/areas/${c._id}`}
                     className="text-xs text-blue-600 underline ml-2"
                   >
                     Open
@@ -284,7 +307,13 @@ export default function CommitteeShowPage({ params }) {
                     <td className="px-2 py-1 font-medium">{p.name}</td>
                     <td className="px-2 py-1 text-xs">{p.position || "—"}</td>
                     <td className="px-2 py-1 text-xs font-mono">
-                      {p.phone || "—"}
+                      {p.phone ? (
+                        <a href={`tel:${p.phone}`} className="text-blue-600">
+                          {p.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     {/* <td className="px-2 py-1 text-xs">
                       {p.designation || "—"}

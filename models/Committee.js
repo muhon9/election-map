@@ -30,7 +30,8 @@ const CommitteeSchema = new Schema(
 
     // Optional: directly link to specific centers (when applicable)
     centers: [{ type: Types.ObjectId, ref: "Center", default: null }],
-    areaId: { type: Types.ObjectId, ref: "Area", default: null },
+    // areaId can keep multiple areas
+    areas: [{ type: Types.ObjectId, ref: "Area", default: null }],
 
     // Attachments: PDFs/JPEGs/PNGs of the committee list
     files: { type: [FileSchema], default: [] },

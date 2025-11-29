@@ -212,42 +212,55 @@ export default function CommitteeForm({ committee = null, onSaved }) {
     });
   }
 
-  // ---------- Area (single, populated areaId) ----------
+  // ---------- Areas (multi-select, like centers) ----------
 
   const [areaSearch, setAreaSearch] = useState("");
 
-  // Seed options with populated areaId to show its name even before search
-  const [areaOpts, setAreaOpts] = useState(() => {
+  // Seed from committee.areas (preferred) or legacy areaId
+  const [areas, setAreas] = useState(() => {
+    if (Array.isArray(committee?.areas) && committee.areas.length > 0) {
+      return committee.areas.map((a) => ({
+        _id: a._id,
+        name: a.name || "",
+        code: a.code,
+        centerName:
+          a.centerName ||
+          (a.center && typeof a.center === "object"
+            ? a.center.name
+            : undefined),
+      }));
+    }
     if (committee?.areaId && typeof committee.areaId === "object") {
-      return [committee.areaId];
+      const a = committee.areaId;
+      return [
+        {
+          _id: a._id,
+          name: a.name || "",
+          code: a.code,
+          centerName:
+            a.centerName ||
+            (a.center && typeof a.center === "object"
+              ? a.center.name
+              : undefined),
+        },
+      ];
     }
     return [];
   });
 
-  const [areaId, setAreaId] = useState(committee?.areaId?._id || "");
-
+  const [areaOpts, setAreaOpts] = useState([]); // suggestions only after search
   const areaTimer = useRef(null);
 
-  const selectedArea =
-    areaOpts.find((x) => String(x._id) === String(areaId)) || null;
-
-  // NOTE: removed initial auto-fetch; we'll only fetch when user types
   function doAreaSearch(term) {
     const q = term ? `?q=${encodeURIComponent(term)}&limit=10` : `?limit=10`;
     fetchJSON(`/api/areas${q}`)
       .then((j) => {
         const items = j.items || [];
-        setAreaOpts((prev) => {
-          const all = [...prev];
-          items.forEach((it) => {
-            if (!all.some((x) => String(x._id) === String(it._id))) {
-              all.push(it);
-            }
-          });
-          return all;
-        });
+        setAreaOpts(items);
       })
-      .catch(() => {});
+      .catch(() => {
+        setAreaOpts([]);
+      });
   }
 
   function onAreaInput(e) {
@@ -255,10 +268,32 @@ export default function CommitteeForm({ committee = null, onSaved }) {
     setAreaSearch(v);
     if (areaTimer.current) clearTimeout(areaTimer.current);
     if (!v.trim()) {
-      // if cleared search, don't fetch / don't show suggestions
+      setAreaOpts([]);
       return;
     }
     areaTimer.current = setTimeout(() => doAreaSearch(v), 300);
+  }
+
+  function toggleArea(a) {
+    setAreas((prev) => {
+      const exists = prev.some((x) => String(x._id) === String(a._id));
+      if (exists) {
+        return prev.filter((x) => String(x._id) !== String(a._id));
+      }
+      return [
+        ...prev,
+        {
+          _id: a._id,
+          name: a.name || "",
+          code: a.code,
+          centerName:
+            a.centerName ||
+            (a.center && typeof a.center === "object"
+              ? a.center.name
+              : a.center),
+        },
+      ];
+    });
   }
 
   // ---------- Bulk import committee persons (Excel) ----------
@@ -378,7 +413,8 @@ export default function CommitteeForm({ committee = null, onSaved }) {
         thumbnailUrl: f.thumbnailUrl || "",
       })),
       centers: centers.map((c) => c._id),
-      areaId: areaId || null,
+      areas: areas.map((a) => a._id), // ✅ multi areas
+      // areaId: null, // optional: keep null if backend still has legacy field
     };
 
     if (!payload.name) {
@@ -628,10 +664,10 @@ export default function CommitteeForm({ committee = null, onSaved }) {
         )}
       </div>
 
-      {/* Area (single) */}
+      {/* Areas (multi, like centers) */}
       <div className="space-y-2">
         <label className="block text-xs font-medium text-gray-700">
-          Attach Area (search)
+          Attach Areas (search)
         </label>
         <div className="flex gap-2">
           <input
@@ -644,42 +680,49 @@ export default function CommitteeForm({ committee = null, onSaved }) {
         {/* Suggestions only after user has typed something */}
         {areaSearch.trim() && areaOpts.length > 0 && (
           <div className="border rounded p-2 max-h-56 overflow-auto bg-white">
-            {areaOpts.map((a) => (
-              <button
-                key={a._id}
-                type="button"
-                className={`w-full text-left px-2 py-1 rounded hover:bg-gray-50 ${
-                  String(areaId) === String(a._id) ? "bg-emerald-50" : ""
-                }`}
-                onClick={() => setAreaId(a._id)}
-                title={a.notes || ""}
-              >
-                <div className="font-medium">{a.name}</div>
-                <div className="text-xs text-gray-600">
-                  Code: {a.code || "—"} · Center:{" "}
-                  {a.centerName ||
-                    (a.center && typeof a.center === "object"
-                      ? a.center.name
-                      : a.center) ||
-                    "—"}
-                </div>
-              </button>
-            ))}
+            {areaOpts.map((a) => {
+              const active = areas.some((x) => String(x._id) === String(a._id));
+              return (
+                <button
+                  key={a._id}
+                  type="button"
+                  className={`w-full text-left px-2 py-1 rounded hover:bg-gray-50 ${
+                    active ? "bg-emerald-50" : ""
+                  }`}
+                  onClick={() => toggleArea(a)}
+                  title={a.notes || ""}
+                >
+                  <div className="font-medium">{a.name}</div>
+                  <div className="text-xs text-gray-600">
+                    Code: {a.code || "—"} · Center:{" "}
+                    {a.centerName ||
+                      (a.center && typeof a.center === "object"
+                        ? a.center.name
+                        : a.center) ||
+                      "—"}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
-        {areaId && (
-          <div className="text-sm">
-            Selected Area:{" "}
-            <span className="font-medium">
-              {selectedArea?.name || String(areaId)}
-            </span>{" "}
-            <button
-              type="button"
-              className="text-red-600 ml-1"
-              onClick={() => setAreaId("")}
-            >
-              ×
-            </button>
+        {areas.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {areas.map((a) => (
+              <span
+                key={a._id}
+                className="inline-flex items-center gap-1 px-2 py-1 border rounded bg-gray-50 text-sm"
+              >
+                {a.name || a._id}
+                <button
+                  type="button"
+                  className="ml-1 text-red-600"
+                  onClick={() => toggleArea({ _id: a._id })}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
           </div>
         )}
       </div>
