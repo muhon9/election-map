@@ -25,8 +25,8 @@ export const GET = withPermApi(async (_req, { params }) => {
   const doc = await Person.findById(id)
     .populate({
       path: "committeeId",
-      select: "name centers areaId",
-      populate: { path: "centers areaId", select: "name" },
+      select: "name centers areas",
+      populate: { path: "centers centers", select: "name" },
     })
     .populate({ path: "area", select: "name code" })
     .populate({ path: "center", select: "name" })

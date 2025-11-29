@@ -111,7 +111,7 @@ export default function PersonEditForm({ person }) {
       className="rounded border bg-white p-4 space-y-5 max-w-2xl"
     >
       {/* Context info (read-only) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-700">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-700">
         <div className="border rounded p-2 bg-gray-50">
           <div className="font-semibold mb-1">Category</div>
           <div>{person.category || "—"}</div>
@@ -120,12 +120,12 @@ export default function PersonEditForm({ person }) {
           <div className="font-semibold mb-1">Committee</div>
           <div>{committee?.name || "—"}</div>
         </div>
-        <div className="border rounded p-2 bg-gray-50">
+        {/* <div className="border rounded p-2 bg-gray-50">
           <div className="font-semibold mb-1">Area / Center</div>
           <div>
-            {committee?.areaId?.name || committee?.centers[0]?.name || "—"}
+            {committee?.areas[0]?.name || committee?.centers[0]?.name || "—"}
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Basic fields */}

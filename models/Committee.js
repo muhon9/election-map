@@ -20,7 +20,7 @@ const FileSchema = new Schema(
 
 const CommitteeSchema = new Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, index: true },
 
     // --- Geography (use validateGeoChain() in routes; model stays neutral) ---
     cityId: { type: Types.ObjectId, ref: "GeoUnit", default: null },
