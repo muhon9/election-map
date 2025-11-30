@@ -12,16 +12,16 @@ const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
 // Minimal style: hide *all* labels and most clutter
 const MINIMAL_MAP_STYLE = [
-  { elementType: "labels", stylers: [{ visibility: "off" }] },
+  // { elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  {
-    featureType: "road",
-    elementType: "labels.icon",
-    stylers: [{ visibility: "off" }],
-  },
-  { featureType: "landscape_man_made", stylers: [{ visibility: "off" }] },
+  // {
+  //   featureType: "road",
+  //   elementType: "labels.icon",
+  //   stylers: [{ visibility: "off" }],
+  // },
+  // { featureType: "landscape_man_made", stylers: [{ visibility: "off" }] },
 ];
 
 // Simple SVG pin as data URL; colorizable
