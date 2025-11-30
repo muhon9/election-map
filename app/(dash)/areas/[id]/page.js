@@ -21,6 +21,11 @@ export default function AreaDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // 🔹 Related committees state
+  const [committees, setCommittees] = useState([]);
+  const [committeesLoading, setCommitteesLoading] = useState(false);
+  const [committeesErr, setCommitteesErr] = useState("");
+
   // Load area (expects GET /api/areas/:id)
   useEffect(() => {
     let alive = true;
@@ -68,6 +73,37 @@ export default function AreaDetailsPage() {
       alive = false;
     };
   }, [area?.center]);
+
+  // 🔹 Load committees related to this area
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    (async () => {
+      try {
+        setCommitteesErr("");
+        setCommitteesLoading(true);
+        const res = await fetch(
+          `/api/committees?areaId=${encodeURIComponent(
+            id
+          )}&limit=50&sort=name&dir=asc`,
+          { cache: "no-store" }
+        );
+        const j = await res.json();
+        if (!alive) return;
+        if (!res.ok) throw new Error(j?.error || "Failed to load committees");
+        setCommittees(Array.isArray(j.items) ? j.items : []);
+      } catch (e) {
+        if (!alive) return;
+        setCommittees([]);
+        setCommitteesErr(e.message || "Failed to load committees");
+      } finally {
+        if (alive) setCommitteesLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   const total = Number(area?.totalVoters ?? 0);
   const male = Number(area?.maleVoters ?? 0);
@@ -211,6 +247,65 @@ export default function AreaDetailsPage() {
             </section>
           )}
 
+          {/* 🔹 Related Committees */}
+          <section className="rounded border bg-white p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Committees in this area</h2>
+              <a
+                href={`/committees?areaId=${encodeURIComponent(id)}`}
+                className="text-xs text-blue-600 underline"
+              >
+                View all
+              </a>
+            </div>
+
+            {committeesLoading && (
+              <div className="text-xs text-gray-600">Loading committees…</div>
+            )}
+
+            {!committeesLoading && committeesErr && (
+              <div className="text-xs text-red-600">{committeesErr}</div>
+            )}
+
+            {!committeesLoading &&
+              !committeesErr &&
+              committees.length === 0 && (
+                <div className="text-xs text-gray-500">
+                  No committees linked to this area yet.
+                </div>
+              )}
+
+            {!committeesLoading && !committeesErr && committees.length > 0 && (
+              <ul className="divide-y text-sm">
+                {committees.map((c) => (
+                  <li
+                    key={c._id}
+                    className="py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"
+                  >
+                    <div>
+                      <a
+                        href={`/committees/${c._id}`}
+                        className="font-medium text-blue-700 underline"
+                      >
+                        {c.name}
+                      </a>
+                      {Array.isArray(c.centers) && c.centers.length > 0 && (
+                        <div className="text-xs text-gray-600">
+                          Centers: {c.centers.map((x) => x.name).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {typeof c.peopleCount === "number"
+                        ? `${c.peopleCount} members`
+                        : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {/* People Accordion */}
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">People</h2>
@@ -236,7 +331,7 @@ function PeopleAccordion({ areaId, initialOpen = null }) {
 
   return (
     <div className="rounded border bg-white divide-y">
-      <PeopleSection
+      {/* <PeopleSection
         title="Committee"
         areaId={areaId}
         category="COMMITTEE"
@@ -246,7 +341,7 @@ function PeopleAccordion({ areaId, initialOpen = null }) {
         }
         defaultSort="order"
         defaultDir="asc"
-      />
+      /> */}
       <PeopleSection
         title="Important"
         areaId={areaId}

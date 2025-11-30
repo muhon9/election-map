@@ -114,15 +114,6 @@ export default function DashboardShell({ children, showAdmin }) {
             <NavItem key={n.href} {...n} />
           ))}
         </nav>
-
-        <div className="mt-6">
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="w-full px-3 py-2 border rounded-md text-sm hover:bg-gray-50"
-          >
-            Logout
-          </button>
-        </div>
       </aside>
 
       {/* Reserve sidebar width on desktop */}
