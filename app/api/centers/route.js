@@ -5,6 +5,11 @@ import Area from "@/models/Area"; // used only for aggregation lookup
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { validateGeoChain } from "@/lib/geo-validate";
+import { Types } from "mongoose";
+
+function oid(v) {
+  return Types.ObjectId.isValid(v) ? new Types.ObjectId(v) : null;
+}
 
 // ---------- GET /api/centers ----------
 export const GET = withPermApi(async (req) => {
@@ -16,6 +21,22 @@ export const GET = withPermApi(async (req) => {
   // -------- Common filter (with area-name search) --------
   const q = (searchParams.get("q") || "").trim();
   const filter = {};
+
+  // Geo filters
+  const cityId = oid(
+    searchParams.get("cityId") || searchParams.get("city_corporation")
+  );
+  const upazilaId = oid(
+    searchParams.get("upazilaId") || searchParams.get("upazila")
+  );
+  const unionId = oid(searchParams.get("unionId") || searchParams.get("union"));
+  const wardId = oid(searchParams.get("wardId") || searchParams.get("ward"));
+
+  if (cityId) filter.cityId = cityId;
+  if (upazilaId) filter.upazilaId = upazilaId;
+  if (unionId) filter.unionId = unionId;
+  if (wardId) filter.wardId = wardId;
+
   if (q) {
     const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
 

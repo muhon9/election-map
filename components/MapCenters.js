@@ -2,29 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
-import CenterAreasPanel from "./CenterAreasPanel";
-import { useSession } from "next-auth/react";
-import { has } from "@/lib/perm";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import CenterAreasPanel from "@/components/CenterAreasPanel";
 
-// The actual <GoogleMap> container gets 100% of this wrapper
+// ------------ Helpers ------------
+
+async function fetchJSON(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
-// Minimal style: hide *all* labels and most clutter
 const MINIMAL_MAP_STYLE = [
-  // { elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  // {
-  //   featureType: "road",
-  //   elementType: "labels.icon",
-  //   stylers: [{ visibility: "off" }],
-  // },
-  // { featureType: "landscape_man_made", stylers: [{ visibility: "off" }] },
 ];
 
-// Simple SVG pin as data URL; colorizable
 function pinDataUrl(color = "#2563eb") {
   return (
     "data:image/svg+xml;utf8," +
@@ -37,465 +33,572 @@ function pinDataUrl(color = "#2563eb") {
   );
 }
 
-export default function MapCenters() {
-  const [centers, setCenters] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+// ------------ Page ------------
 
-  // URL utils
+export default function MapPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const sp = useSearchParams();
+  const pathname = usePathname();
 
-  // RBAC
-  const { data: session } = useSession();
-  const user = session?.user;
-  const canEdit = has(user, "edit_center");
+  // URL-driven state
+  const mode = sp.get("mode") === "rural" ? "rural" : "city"; // default city
+
+  const cityId = sp.get("cityId") || "";
+  const cityWardId = sp.get("cityWardId") || "";
+  const upazilaId = sp.get("upazilaId") || "";
+  const unionId = sp.get("unionId") || "";
+  const ruralWardId = sp.get("ruralWardId") || "";
+  const selectedId = sp.get("sel") || "";
+
+  // Data state
+  const [cityCorps, setCityCorps] = useState([]);
+  const [cityWards, setCityWards] = useState([]);
+  const [upazilas, setUpazilas] = useState([]);
+  const [unions, setUnions] = useState([]);
+  const [ruralWards, setRuralWards] = useState([]);
+
+  const [centers, setCenters] = useState([]);
+  const [loadingGeo, setLoadingGeo] = useState(false);
+  const [loadingCenters, setLoadingCenters] = useState(false);
+  const [err, setErr] = useState("");
 
   // Google Maps loader
   const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
+    id: "map-page-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   });
 
-  // Load centers for map mode (returns full docs)
+  // Global marker label styles (same as MapCenters)
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.innerHTML = `
+      .marker-badge {
+        background: white;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 11px;
+        line-height: 1.2;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        transform: translateY(-6px);
+        pointer-events: none;
+        color: #111827;
+        font-weight: 600;
+      }
+      .marker-badge--selected {
+        border-color: rgba(16, 185, 129, 0.25);
+        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  // Helper: update query params in URL (filters + selection)
+  function updateQuery(patch, { replace = false } = {}) {
+    const params = new URLSearchParams(sp.toString());
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === "" || typeof value === "undefined") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    }
+    const qs = params.toString();
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    if (replace) router.replace(url);
+    else router.push(url);
+  }
+
+  // ---- Load top-level geo (city corps, upazilas) ----
   useEffect(() => {
     let alive = true;
     (async () => {
-      const res = await fetch(`/api/centers?mode=map`, { cache: "no-store" });
-      const data = await res.json();
-      if (!alive) return;
-      setCenters(Array.isArray(data) ? data : data.items || []);
+      try {
+        setLoadingGeo(true);
+        const [cc, upa] = await Promise.all([
+          fetchJSON("/api/geo?type=city_corporation&active=1"),
+          fetchJSON("/api/geo?type=upazila&active=1"),
+        ]);
+        if (!alive) return;
+        setCityCorps(cc.items || []);
+        setUpazilas(upa.items || []);
+      } catch (e) {
+        if (!alive) return;
+        console.error("Failed loading geo top-level", e);
+      } finally {
+        if (alive) setLoadingGeo(false);
+      }
     })();
     return () => {
       alive = false;
     };
   }, []);
 
-  // Sync selected center from URL (?sel=ID) whenever centers or URL changes
+  // City changed -> load wards
   useEffect(() => {
-    const selFromUrl = sp.get("sel");
-    if (!selFromUrl) {
-      setSelectedId(null);
+    if (!cityId) {
+      setCityWards([]);
       return;
     }
-    if (centers.some((c) => String(c._id) === selFromUrl)) {
-      setSelectedId(selFromUrl);
-    }
-  }, [sp, centers]);
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${cityId}&active=1`);
+        if (!alive) return;
+        setCityWards(j.items || []);
+      } catch (e) {
+        if (!alive) return;
+        console.error(e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [cityId]);
 
-  // Memo selected
+  // Upazila changed -> load unions
+  useEffect(() => {
+    if (!upazilaId) {
+      setUnions([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${upazilaId}&active=1`);
+        if (!alive) return;
+        setUnions(j.items || []);
+      } catch (e) {
+        if (!alive) return;
+        console.error(e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [upazilaId]);
+
+  // Union changed -> load rural wards
+  useEffect(() => {
+    if (!unionId) {
+      setRuralWards([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetchJSON(`/api/geo?parentId=${unionId}&active=1`);
+        if (!alive) return;
+        setRuralWards(j.items || []);
+      } catch (e) {
+        if (!alive) return;
+        console.error(e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [unionId]);
+
+  // ---- Mode toggle ----
+  function chooseMode(next) {
+    if (next === "city") {
+      updateQuery({
+        mode: "city",
+        upazilaId: null,
+        unionId: null,
+        ruralWardId: null,
+        sel: null,
+      });
+    } else {
+      updateQuery({
+        mode: "rural",
+        cityId: null,
+        cityWardId: null,
+        sel: null,
+      });
+    }
+  }
+
+  // ---- Load centers when filters change ----
+  useEffect(() => {
+    let alive = true;
+
+    async function loadCenters() {
+      setLoadingCenters(true);
+      setErr("");
+      setCenters([]);
+
+      try {
+        const params = [];
+
+        if (mode === "city") {
+          if (cityId) params.push(`cityId=${encodeURIComponent(cityId)}`);
+          if (cityWardId)
+            params.push(`wardId=${encodeURIComponent(cityWardId)}`);
+        } else {
+          if (upazilaId)
+            params.push(`upazilaId=${encodeURIComponent(upazilaId)}`);
+          if (unionId) params.push(`unionId=${encodeURIComponent(unionId)}`);
+          if (ruralWardId)
+            params.push(`wardId=${encodeURIComponent(ruralWardId)}`);
+        }
+
+        // If no filters -> do not load anything
+        if (params.length === 0) {
+          if (!alive) return;
+          setCenters([]);
+          setLoadingCenters(false);
+          return;
+        }
+
+        const qs = `?${params.join("&")}&limit=500`;
+        const j = await fetchJSON(`/api/centers${qs}`);
+        if (!alive) return;
+
+        const items = Array.isArray(j) ? j : j.items || [];
+        setCenters(items);
+      } catch (e) {
+        if (!alive) return;
+        console.error(e);
+        setErr(e.message || "Failed to load centers");
+        setCenters([]);
+      } finally {
+        if (alive) setLoadingCenters(false);
+      }
+    }
+
+    loadCenters();
+    return () => {
+      alive = false;
+    };
+  }, [mode, cityId, cityWardId, upazilaId, unionId, ruralWardId]);
+
+  // Map center
+  const initialCenter = useMemo(() => {
+    if (!centers.length) return { lat: 24.8949, lng: 91.8687 }; // Sylhet fallback
+    const lat =
+      centers.reduce((a, c) => a + (c.lat || 0), 0) / (centers.length || 1);
+    const lng =
+      centers.reduce((a, c) => a + (c.lng || 0), 0) / (centers.length || 1);
+    return { lat, lng };
+  }, [centers]);
+
   const selected = useMemo(
     () => centers.find((c) => String(c._id) === String(selectedId)) || null,
     [centers, selectedId]
   );
 
-  // Center the map sensibly
-  const initialCenter = useMemo(() => {
-    if (!centers.length) return { lat: 23.7806, lng: 90.407 }; // Dhaka fallback
-    const lat = centers.reduce((a, c) => a + (c.lat || 0), 0) / centers.length;
-    const lng = centers.reduce((a, c) => a + (c.lng || 0), 0) / centers.length;
-    return { lat, lng };
-  }, [centers]);
-
-  const onMapLoad = (map) => {
-    if (centers.length) {
-      const bounds = new window.google.maps.LatLngBounds();
-      centers.forEach((c) => {
-        if (typeof c.lat === "number" && typeof c.lng === "number") {
-          bounds.extend({ lat: c.lat, lng: c.lng });
-        }
-      });
-      if (!bounds.isEmpty()) map.fitBounds(bounds);
-    }
-  };
-
-  // Helper: write sel into URL without full nav
-  function setSelInUrl(idOrNull) {
-    const params = new URLSearchParams(sp.toString());
-    if (idOrNull) params.set("sel", String(idOrNull));
-    else params.delete("sel");
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
-
   function onMarkerClick(id) {
-    setSelectedId(id);
-    setSelInUrl(id);
+    updateQuery({ sel: id });
   }
 
   function clearSelection() {
-    setSelectedId(null);
-    setSelInUrl(null);
+    updateQuery({ sel: null });
+  }
+
+  function onMapLoad(map) {
+    if (!centers.length) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    centers.forEach((c) => {
+      if (typeof c.lat === "number" && typeof c.lng === "number") {
+        bounds.extend({ lat: c.lat, lng: c.lng });
+      }
+    });
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds);
+    }
   }
 
   return (
-    <div className="space-y-3">
-      {/* Marker label (white card) styles */}
-      <style jsx global>{`
-        .marker-badge {
-          background: white;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          border-radius: 6px;
-          padding: 2px 6px;
-          font-size: 11px;
-          line-height: 1.2;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-          transform: translateY(-6px);
-          pointer-events: none; /* keep clicks on marker, not label */
-          color: #111827;
-          font-weight: 600;
-        }
-        .marker-badge--selected {
-          border-color: rgba(16, 185, 129, 0.25);
-          box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
-        }
-      `}</style>
+    <div className="flex flex-col h-[calc(100vh-4rem)] space-y-2">
+      {/* Top filter bar */}
+      <div className="border-b bg-white/90 backdrop-blur px-3 py-2 z-10">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Mode tabs */}
+          <div className="inline-flex rounded border overflow-hidden">
+            <button
+              type="button"
+              className={`px-3 py-1.5 text-sm ${
+                mode === "city"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white hover:bg-gray-50"
+              }`}
+              onClick={() => chooseMode("city")}
+            >
+              City
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1.5 text-sm ${
+                mode === "rural"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white hover:bg-gray-50"
+              }`}
+              onClick={() => chooseMode("rural")}
+            >
+              Upazila
+            </button>
+          </div>
 
-      {/* Map wrapper with responsive height:
-         - mobile: ~55vh
-         - md+: 420px */}
-      <div className="rounded border overflow-hidden h-[55vh] md:h-[420px]">
-        {isLoaded && (
-          <GoogleMap
-            mapContainerStyle={MAP_CONTAINER_STYLE}
-            center={initialCenter}
-            zoom={12}
-            onLoad={onMapLoad}
-            onClick={clearSelection}
-            options={{
-              styles: MINIMAL_MAP_STYLE,
-              disableDefaultUI: true,
-              zoomControl: true,
-              gestureHandling: "greedy",
-              backgroundColor: "#f7f7f7",
-            }}
-          >
-            {centers.map((c) => {
-              const id = String(c._id);
-              const isSelected = id === String(selectedId);
-              const short = c?.name
-                ? c.name.length > 12
-                  ? c.name.slice(0, 12) + "…"
-                  : c.name
-                : "Center";
-              return (
-                <Marker
-                  key={id}
-                  position={{ lat: c.lat, lng: c.lng }}
-                  onClick={() => onMarkerClick(id)}
-                  icon={{
-                    url: isSelected
-                      ? pinDataUrl("#16a34a")
-                      : pinDataUrl("#2563eb"),
-                    scaledSize: new google.maps.Size(32, 32),
-                    anchor: new google.maps.Point(16, 32),
-                    labelOrigin: new google.maps.Point(16, -2),
-                  }}
-                  label={{
-                    text: short,
-                    className: `marker-badge ${
-                      isSelected ? "marker-badge--selected" : ""
-                    }`,
-                  }}
-                  zIndex={isSelected ? 999 : 1}
-                />
-              );
-            })}
-          </GoogleMap>
-        )}
-      </div>
-
-      {/* Details panel */}
-      {/* Mobile: collapsible; Desktop: open card */}
-      <div className="rounded border bg-white">
-        {/* MOBILE COLLAPSIBLE */}
-        <div className="md:hidden">
-          <details open={!!selected}>
-            <summary className="list-none p-3 border-b cursor-pointer flex items-center justify-between">
-              <span className="font-medium">
-                {selected ? selected.name : `${centers.length} centers`}
-              </span>
-              <span className="text-sm text-gray-500">Details</span>
-            </summary>
-
-            <div className="p-3 space-y-3">
-              {!selected ? (
-                <div className="text-sm text-gray-600">
-                  Tap a marker to see center details.
-                </div>
-              ) : (
-                <MobileDetails
-                  selected={selected}
-                  canEdit={canEdit}
-                  clearSelection={clearSelection}
-                />
-              )}
-            </div>
-          </details>
-        </div>
-
-        {/* DESKTOP OPEN CARD */}
-        <div className="hidden md:block p-4">
-          {!selected ? (
-            <div className="text-sm text-gray-600">
-              {centers.length} centers found. Tap a marker to see center
-              details.
+          {/* City filters */}
+          {mode === "city" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="border rounded px-2 py-1.5 text-sm"
+                value={cityId}
+                onChange={(e) =>
+                  updateQuery({
+                    mode: "city",
+                    cityId: e.target.value || null,
+                    cityWardId: null,
+                    upazilaId: null,
+                    unionId: null,
+                    ruralWardId: null,
+                    sel: null,
+                  })
+                }
+              >
+                <option value="">City Corporation…</option>
+                {cityCorps.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="border rounded px-2 py-1.5 text-sm"
+                value={cityWardId}
+                onChange={(e) =>
+                  updateQuery({
+                    mode: "city",
+                    cityWardId: e.target.value || null,
+                    sel: null,
+                  })
+                }
+                disabled={!cityId}
+              >
+                <option value="">Ward…</option>
+                {cityWards.map((w) => (
+                  <option key={w._id} value={w._id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
             </div>
           ) : (
-            <DesktopDetails
-              selected={selected}
-              canEdit={canEdit}
-              clearSelection={clearSelection}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===== Hook + panel for related committees ===== */
-
-function useCenterCommittees(centerId) {
-  const [committees, setCommittees] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    if (!centerId) return;
-    let alive = true;
-
-    (async () => {
-      try {
-        setLoading(true);
-        setErr("");
-        const res = await fetch(
-          `/api/committees?centerId=${centerId}&limit=100&sort=createdAt&dir=desc`,
-          { cache: "no-store" }
-        );
-        const j = await res.json();
-        if (!alive) return;
-
-        if (!res.ok) {
-          throw new Error(j?.error || "Failed to load committees");
-        }
-
-        const items = Array.isArray(j) ? j : j.items || [];
-        setCommittees(items);
-      } catch (e) {
-        if (!alive) return;
-        setErr(e.message || "Failed to load committees");
-        setCommittees([]);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [centerId]);
-
-  return { committees, loading, err };
-}
-
-function CenterCommitteesPanel({ centerId }) {
-  const { committees, loading, err } = useCenterCommittees(centerId);
-
-  if (!centerId) return null;
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-base font-semibold">Related Committees</h3>
-
-      {loading && (
-        <div className="text-sm text-gray-600">Loading committees…</div>
-      )}
-
-      {!loading && err && <div className="text-sm text-red-600">{err}</div>}
-
-      {!loading && !err && committees.length === 0 && (
-        <div className="text-sm text-gray-500">
-          No committees found for this center.
-        </div>
-      )}
-
-      {!loading && !err && committees.length > 0 && (
-        <ul className="text-sm space-y-1">
-          {committees.map((c) => (
-            <li key={c._id} className="flex items-center justify-between gap-2">
-              <a
-                href={`/committees/${c._id}`}
-                className="text-blue-600 hover:underline"
+            // Rural filters
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="border rounded px-2 py-1.5 text-sm"
+                value={upazilaId}
+                onChange={(e) =>
+                  updateQuery({
+                    mode: "rural",
+                    upazilaId: e.target.value || null,
+                    unionId: null,
+                    ruralWardId: null,
+                    cityId: null,
+                    cityWardId: null,
+                    sel: null,
+                  })
+                }
               >
-                {c.name}
-                {c.peopleCount ? `  (${c.peopleCount} members)` : ""}
-              </a>{" "}
-              {Array.isArray(c.centers) && c.centers.length > 1 && (
-                <span className="text-xs text-gray-500">
-                  {c.centers.length} centers
-                </span>
+                <option value="">Upazila…</option>
+                {upazilas.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="border rounded px-2 py-1.5 text-sm"
+                value={unionId}
+                onChange={(e) =>
+                  updateQuery({
+                    mode: "rural",
+                    unionId: e.target.value || null,
+                    ruralWardId: null,
+                    sel: null,
+                  })
+                }
+                disabled={!upazilaId}
+              >
+                <option value="">Union…</option>
+                {unions.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="border rounded px-2 py-1.5 text-sm"
+                value={ruralWardId}
+                onChange={(e) =>
+                  updateQuery({
+                    mode: "rural",
+                    ruralWardId: e.target.value || null,
+                    sel: null,
+                  })
+                }
+                disabled={!unionId}
+              >
+                <option value="">Ward…</option>
+                {ruralWards.map((w) => (
+                  <option key={w._id} value={w._id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="ml-auto text-xs text-gray-600">
+            {loadingGeo
+              ? "Loading locations…"
+              : loadingCenters
+              ? "Loading centers…"
+              : centers.length
+              ? `${centers.length} centers`
+              : "Select filter to see centers"}
+          </div>
+        </div>
+
+        {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
+      </div>
+
+      {/* Map + side panel */}
+      <div className="flex-1 grid grid-rows-[minmax(0,1fr)_auto] md:grid-rows-1 md:grid-cols-[minmax(0,2.5fr)_minmax(0,1.3fr)] gap-2">
+        {/* Map */}
+        <div className="rounded border overflow-hidden">
+          {!isLoaded ? (
+            <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">
+              Loading map…
+            </div>
+          ) : !centers.length ? (
+            <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">
+              Select City / Upazila filters to view centers on map.
+            </div>
+          ) : (
+            <GoogleMap
+              mapContainerStyle={MAP_CONTAINER_STYLE}
+              center={initialCenter}
+              zoom={12}
+              onLoad={onMapLoad}
+              onClick={clearSelection}
+              options={{
+                styles: MINIMAL_MAP_STYLE,
+                disableDefaultUI: true,
+                zoomControl: true,
+                gestureHandling: "greedy",
+                backgroundColor: "#f7f7f7",
+              }}
+            >
+              {centers.map((c) => {
+                const id = String(c._id);
+                const isSelected = id === String(selectedId);
+                const short = c?.name
+                  ? c.name.length > 12
+                    ? c.name.slice(0, 12) + "…"
+                    : c.name
+                  : "Center";
+
+                if (typeof c.lat !== "number" || typeof c.lng !== "number") {
+                  return null;
+                }
+
+                return (
+                  <Marker
+                    key={id}
+                    position={{ lat: c.lat, lng: c.lng }}
+                    onClick={() => onMarkerClick(id)}
+                    icon={{
+                      url: isSelected
+                        ? pinDataUrl("#16a34a")
+                        : pinDataUrl("#2563eb"),
+                      scaledSize: new google.maps.Size(32, 32),
+                      anchor: new google.maps.Point(16, 32),
+                      labelOrigin: new google.maps.Point(16, -2),
+                    }}
+                    label={{
+                      text: short,
+                      className: `marker-badge ${
+                        isSelected ? "marker-badge--selected" : ""
+                      }`,
+                    }}
+                    zIndex={isSelected ? 999 : 1}
+                  />
+                );
+              })}
+            </GoogleMap>
+          )}
+        </div>
+
+        {/* Side info (center details + areas) */}
+        <div className="rounded border bg-white p-3 text-sm overflow-y-auto">
+          {!selected ? (
+            <div className="text-gray-600">
+              {centers.length
+                ? "Click a marker to see center details and areas here."
+                : "No centers selected."}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Basic center info */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-gray-800">
+                  {selected.name}
+                </div>
+                <a
+                  href={`/centers/${selected._id}`}
+                  className="text-blue-600 underline"
+                >
+                  Open
+                </a>
+              </div>
+
+              {selected.address && (
+                <div>
+                  <span className="text-gray-500">Address:</span>{" "}
+                  {selected.address}
+                </div>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
-/* ===== Subcomponents for clarity ===== */
+              <div className="flex flex-wrap gap-3">
+                <div>
+                  <span className="text-gray-500">Total voters:</span>{" "}
+                  <span className="font-semibold text-green-700">
+                    {selected.totalVoters ?? 0}
+                  </span>
+                </div>
+                <div>Male: {selected.maleVoters ?? 0}</div>
+                <div>Female: {selected.femaleVoters ?? 0}</div>
+              </div>
 
-function DesktopDetails({ selected, canEdit, clearSelection }) {
-  return (
-    <div className="grid md:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-      {/* Header row */}
-      <div className="md:col-span-2 flex items-center justify-between gap-3">
-        <div className="text-lg font-semibold text-gray-800">
-          {selected.name}
-        </div>
-        <div className="flex items-center gap-3">
-          <a
-            className="text-gray-700 underline"
-            href={`/centers/${selected._id}`}
-          >
-            See details
-          </a>
-          {canEdit && (
-            <a
-              className="inline-flex items-center px-3 py-1.5 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
-              href={`/centers/${selected._id}/edit`}
-            >
-              Edit
-            </a>
+              {selected.notes && (
+                <div>
+                  <span className="text-gray-500">Notes:</span> {selected.notes}
+                </div>
+              )}
+
+              {/* Areas & voters for this center */}
+              <div className="pt-2 border-t mt-2">
+                <h3 className="font-semibold mb-1">Areas & People</h3>
+                <CenterAreasPanel center={selected} />
+              </div>
+
+              <button
+                className="mt-2 text-gray-600 hover:underline"
+                onClick={clearSelection}
+              >
+                Clear selection
+              </button>
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Address */}
-      <div>
-        <span className="text-gray-500">Address:</span>{" "}
-        {selected.address || "—"}
-      </div>
-
-      {/* Voters summary */}
-      <div className="md:col-span-2 mt-2">
-        <span className="text-gray-500">Total voters:</span>{" "}
-        <span className="text-md font-bold text-green-700">
-          {selected.totalVoters ?? 0}
-        </span>
-        <div className="ml-4 mt-1 text-sm text-gray-700">
-          <div>Male voters: {selected.maleVoters ?? 0}</div>
-          <div>Female voters: {selected.femaleVoters ?? 0}</div>
-        </div>
-      </div>
-
-      {/* Notes */}
-      {selected.notes && (
-        <div className="md:col-span-2">
-          <span className="text-gray-500">Notes:</span> {selected.notes}
-        </div>
-      )}
-
-      {/* Committees + Areas & People */}
-      <div className="md:col-span-2 mt-4 space-y-4">
-        {/* Related committees (NEW, before Areas & People) */}
-        <CenterCommitteesPanel centerId={selected._id} />
-
-        {/* Areas & People */}
-        <div>
-          <h3 className="text-base font-semibold mb-2">Areas & People</h3>
-          <CenterAreasPanel center={selected} />
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="md:col-span-2 mt-2">
-        <a className="text-gray-600 underline mr-3" href={`/centers`}>
-          All centers
-        </a>
-        <button
-          className="text-gray-600 hover:underline"
-          onClick={clearSelection}
-        >
-          Clear selection
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MobileDetails({ selected, canEdit, clearSelection }) {
-  return (
-    <div className="space-y-4">
-      {/* Header actions */}
-      <div className="flex items-center justify-between text-sm">
-        <div className="font-semibold">{selected.name}</div>
-        <div className="flex items-center gap-3">
-          <a
-            className="text-gray-700 underline"
-            href={`/centers/${selected._id}`}
-          >
-            Details
-          </a>
-          {canEdit && (
-            <a
-              className="px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
-              href={`/centers/${selected._id}/edit`}
-            >
-              Edit
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* Address */}
-      <div className="text-sm">
-        <span className="text-gray-500">Address:</span>{" "}
-        {selected.address || "—"}
-      </div>
-
-      {/* Voters summary */}
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <div>
-          <span className="text-gray-500">Total:</span>{" "}
-          <span className="font-semibold text-green-700">
-            {selected.totalVoters ?? 0}
-          </span>
-        </div>
-        <div className="text-gray-700">M: {selected.maleVoters ?? 0}</div>
-        <div className="text-gray-700">F: {selected.femaleVoters ?? 0}</div>
-      </div>
-
-      {/* Notes */}
-      {selected.notes && (
-        <div className="text-sm">
-          <span className="text-gray-500">Notes:</span> {selected.notes}
-        </div>
-      )}
-
-      {/* Related Committees (NEW, before Areas & People) */}
-      <div>
-        <CenterCommitteesPanel centerId={selected._id} />
-      </div>
-
-      {/* Areas & People */}
-      <div>
-        <h3 className="text-sm font-semibold mb-2">Areas & People</h3>
-        <CenterAreasPanel center={selected} />
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between">
-        <a className="text-gray-600 underline" href={`/centers`}>
-          All centers
-        </a>
-        <button
-          className="text-gray-600 hover:underline"
-          onClick={clearSelection}
-        >
-          Clear
-        </button>
       </div>
     </div>
   );
