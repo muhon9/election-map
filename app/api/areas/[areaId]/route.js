@@ -28,6 +28,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
   // Build a sanitized $set payload (allow-list)
   const set = {};
+  const unset = {};
 
   // Strings
   if ("name" in body) set.name = String(body.name || "").trim();
@@ -48,13 +49,51 @@ export const PATCH = withPermApi(async (req, { params }) => {
     }
   }
 
+  // Shape (GeoJSON Polygon / MultiPolygon)
+  if ("shape" in body) {
+    const s = body.shape;
+
+    // Clear shape
+    if (s === null || s === undefined || s === "") {
+      unset.shape = "";
+    } else {
+      const type = s.type;
+      const coords = s.coordinates;
+
+      if (!type || !["Polygon", "MultiPolygon"].includes(type)) {
+        return new Response(
+          JSON.stringify({
+            error: "shape.type must be Polygon or MultiPolygon",
+          }),
+          { status: 400 }
+        );
+      }
+      if (!Array.isArray(coords)) {
+        return new Response(
+          JSON.stringify({ error: "shape.coordinates must be an array" }),
+          { status: 400 }
+        );
+      }
+
+      // Store minimal clean structure (+ optional rawGeoJSON if you pass it)
+      set.shape = {
+        type,
+        coordinates: coords,
+        ...(s.rawGeoJSON ? { rawGeoJSON: s.rawGeoJSON } : {}),
+      };
+    }
+  }
+
   // (Deliberately do NOT allow changing "center" here via PATCH)
 
-  const doc = await Area.findByIdAndUpdate(
-    params.areaId,
-    { $set: set },
-    { new: true, runValidators: true }
-  ).lean();
+  const update = {};
+  if (Object.keys(set).length) update.$set = set;
+  if (Object.keys(unset).length) update.$unset = unset;
+
+  const doc = await Area.findByIdAndUpdate(params.areaId, update, {
+    new: true,
+    runValidators: true,
+  }).lean();
 
   if (!doc) {
     return new Response(JSON.stringify({ error: "Not found" }), {

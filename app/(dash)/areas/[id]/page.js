@@ -4,8 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { has } from "@/lib/perm";
+import { GoogleMap, Polygon, useJsApiLoader } from "@react-google-maps/api";
 
 const PAGE_SIZES = [10, 20, 50];
+
+const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
+const MINIMAL_MAP_STYLE = [
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+];
 
 export default function AreaDetailsPage() {
   const { id } = useParams(); // /areas/[id]
@@ -25,6 +33,12 @@ export default function AreaDetailsPage() {
   const [committees, setCommittees] = useState([]);
   const [committeesLoading, setCommitteesLoading] = useState(false);
   const [committeesErr, setCommitteesErr] = useState("");
+
+  // Google Maps loader (for area boundary map)
+  const { isLoaded: mapLoaded } = useJsApiLoader({
+    id: "map-page-script",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+  });
 
   // Load area (expects GET /api/areas/:id)
   useEffect(() => {
@@ -123,6 +137,29 @@ export default function AreaDetailsPage() {
   const validTabs = ["COMMITTEE", "RENOWNED", "CONTACT"];
   const initialOpen = validTabs.includes(tabFromUrl) ? tabFromUrl : null;
 
+  // ---------- Area shape → Google Maps paths ----------
+
+  const shapePaths = useMemo(
+    () => normalizeShapeToPaths(area?.shape),
+    [area?.shape]
+  );
+
+  const hasShape = shapePaths.length > 0;
+
+  const mapCenter = useMemo(() => {
+    if (!hasShape) {
+      // Fallback: Sylhet-ish
+      return { lat: 24.8949, lng: 91.8687 };
+    }
+    const points = shapePaths.flat();
+    if (!points.length) return { lat: 24.8949, lng: 91.8687 };
+    const lat =
+      points.reduce((acc, p) => acc + (p.lat || 0), 0) / points.length;
+    const lng =
+      points.reduce((acc, p) => acc + (p.lng || 0), 0) / points.length;
+    return { lat, lng };
+  }, [shapePaths, hasShape]);
+
   return (
     <div className="space-y-6">
       {/* Top bar */}
@@ -188,6 +225,47 @@ export default function AreaDetailsPage() {
       {/* Content */}
       {!loading && !err && area && (
         <>
+          {/* 🔺 Area boundary map */}
+          <section className="rounded border bg-white p-4 space-y-2">
+            <h2 className="text-sm font-semibold">Area boundary</h2>
+            {!hasShape ? (
+              <div className="text-xs text-gray-500">
+                No area boundary specified.
+              </div>
+            ) : !mapLoaded ? (
+              <div className="text-xs text-gray-600">Loading map…</div>
+            ) : (
+              <div className="mt-2 w-full h-64 rounded border overflow-hidden">
+                <GoogleMap
+                  mapContainerStyle={MAP_CONTAINER_STYLE}
+                  center={mapCenter}
+                  zoom={15}
+                  options={{
+                    styles: MINIMAL_MAP_STYLE,
+                    disableDefaultUI: true,
+                    zoomControl: true,
+                    gestureHandling: "greedy",
+                    backgroundColor: "#f7f7f7",
+                  }}
+                >
+                  {shapePaths.map((path, idx) => (
+                    <Polygon
+                      key={idx}
+                      paths={path}
+                      options={{
+                        strokeColor: "#ef4444", // red-500 line
+                        strokeOpacity: 0.9,
+                        strokeWeight: 2,
+                        fillOpacity: 0, // transparent inside
+                        clickable: false,
+                      }}
+                    />
+                  ))}
+                </GoogleMap>
+              </div>
+            )}
+          </section>
+
           {/* Stat cards */}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatCard
@@ -315,6 +393,44 @@ export default function AreaDetailsPage() {
       )}
     </div>
   );
+}
+
+/* -------- helpers for shapes -------- */
+
+function normalizeShapeToPaths(shape) {
+  if (!shape || !shape.type || !shape.coordinates) return [];
+
+  // Polygon: coordinates = [ [ [lng, lat], ... ], [hole], ... ]
+  if (shape.type === "Polygon") {
+    const outer = Array.isArray(shape.coordinates?.[0])
+      ? shape.coordinates[0]
+      : [];
+    if (!outer.length) return [];
+    return [
+      outer.map((pt) => {
+        const [lng, lat] = pt;
+        return { lat: Number(lat), lng: Number(lng) };
+      }),
+    ];
+  }
+
+  // MultiPolygon: coordinates = [ [ [ [lng, lat], ... ], ... ], ... ]
+  if (shape.type === "MultiPolygon") {
+    const paths = [];
+    for (const poly of shape.coordinates || []) {
+      const outer = Array.isArray(poly?.[0]) ? poly[0] : [];
+      if (!outer.length) continue;
+      paths.push(
+        outer.map((pt) => {
+          const [lng, lat] = pt;
+          return { lat: Number(lat), lng: Number(lng) };
+        })
+      );
+    }
+    return paths;
+  }
+
+  return [];
 }
 
 /* -------- People Accordion (reacts to ?tab=) -------- */

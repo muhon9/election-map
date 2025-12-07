@@ -30,6 +30,7 @@ export default function AreaEditPage() {
     maleVoters: "",
     femaleVoters: "",
     notes: "",
+    shapeJson: "", // NEW: raw GeoJSON text
   });
 
   // Selected People tab (URL-driven and reactive)
@@ -44,7 +45,7 @@ export default function AreaEditPage() {
   }, [sp]);
 
   // Area Info collapse/expand
-  const [areaOpen, setAreaOpen] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(true);
   const areaRef = useRef(null);
   function toggleArea() {
     setAreaOpen((o) => {
@@ -73,6 +74,22 @@ export default function AreaEditPage() {
         if (!alive) return;
         if (!res.ok) throw new Error(j?.error || "Failed to load area");
         setArea(j);
+
+        // Prepare shape JSON text (prefer rawGeoJSON if present)
+        let shapeJson = "";
+        if (j.shape) {
+          if (j.shape.rawGeoJSON) {
+            shapeJson = JSON.stringify(j.shape.rawGeoJSON, null, 2);
+          } else {
+            // fallback: store shape itself
+            shapeJson = JSON.stringify(
+              { type: j.shape.type, coordinates: j.shape.coordinates },
+              null,
+              2
+            );
+          }
+        }
+
         setForm({
           name: j.name || "",
           code: j.code || "",
@@ -80,6 +97,7 @@ export default function AreaEditPage() {
           maleVoters: j.maleVoters ?? "",
           femaleVoters: j.femaleVoters ?? "",
           notes: j.notes || "",
+          shapeJson,
         });
       } catch (e) {
         if (!alive) return;
@@ -128,6 +146,47 @@ export default function AreaEditPage() {
       notes: (form.notes || "").trim(),
     };
 
+    // Shape handling
+    const trimmedShape = (form.shapeJson || "").trim();
+    if (trimmedShape) {
+      try {
+        const parsed = JSON.parse(trimmedShape);
+
+        let geom = parsed;
+        // Accept FeatureCollection / Feature / bare geometry
+        if (parsed.type === "FeatureCollection") {
+          geom = parsed.features?.[0]?.geometry;
+        } else if (parsed.type === "Feature") {
+          geom = parsed.geometry;
+        }
+
+        if (!geom || !geom.type || !geom.coordinates) {
+          alert(
+            "Invalid GeoJSON: could not find geometry (type/coordinates missing)."
+          );
+          return;
+        }
+
+        if (!["Polygon", "MultiPolygon"].includes(geom.type)) {
+          alert("Only Polygon or MultiPolygon are supported for area shapes.");
+          return;
+        }
+
+        payload.shape = {
+          type: geom.type,
+          coordinates: geom.coordinates,
+          rawGeoJSON: parsed,
+        };
+      } catch (e) {
+        console.error(e);
+        alert("Invalid GeoJSON in shape field. Please check your JSON.");
+        return;
+      }
+    } else {
+      // explicitly clear shape if empty
+      payload.shape = null;
+    }
+
     // Soft validation
     if (payload.totalVoters < payload.maleVoters + payload.femaleVoters) {
       const ok = confirm("Total voters is less than Male + Female. Continue?");
@@ -147,7 +206,21 @@ export default function AreaEditPage() {
         return;
       }
       setArea(j);
-      // sync
+
+      // Re-sync form (also recompute shape JSON from response)
+      let shapeJson = "";
+      if (j.shape) {
+        if (j.shape.rawGeoJSON) {
+          shapeJson = JSON.stringify(j.shape.rawGeoJSON, null, 2);
+        } else {
+          shapeJson = JSON.stringify(
+            { type: j.shape.type, coordinates: j.shape.coordinates },
+            null,
+            2
+          );
+        }
+      }
+
       setForm({
         name: j.name || "",
         code: j.code || "",
@@ -155,6 +228,7 @@ export default function AreaEditPage() {
         maleVoters: j.maleVoters ?? "",
         femaleVoters: j.femaleVoters ?? "",
         notes: j.notes || "",
+        shapeJson,
       });
       alert("Area updated.");
     } finally {
@@ -341,7 +415,10 @@ export default function AreaEditPage() {
                       className="border rounded w-full px-3 py-2"
                       value={form.femaleVoters}
                       onChange={(e) =>
-                        setForm((f) => ({ ...f, femaleVoters: e.target.value }))
+                        setForm((f) => ({
+                          ...f,
+                          femaleVoters: e.target.value,
+                        }))
                       }
                       disabled={!canEdit}
                     />
@@ -359,6 +436,35 @@ export default function AreaEditPage() {
                         setForm((f) => ({ ...f, notes: e.target.value }))
                       }
                       disabled={!canEdit}
+                    />
+                  </div>
+
+                  {/* NEW: Shape GeoJSON textarea */}
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Area shape (GeoJSON)
+                    </label>
+                    <p className="text-[11px] text-gray-500 mb-1">
+                      Paste a GeoJSON <code>FeatureCollection</code>,{" "}
+                      <code>Feature</code>, or geometry (<code>Polygon</code>/
+                      <code>MultiPolygon</code>) from geojson.io. Leave empty to
+                      remove shape.
+                    </p>
+                    <textarea
+                      rows={8}
+                      className="border rounded w-full px-3 py-2 font-mono text-[11px]"
+                      value={form.shapeJson}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, shapeJson: e.target.value }))
+                      }
+                      disabled={!canEdit}
+                      placeholder='{
+  "type": "Feature",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [ ... ]
+  }
+}'
                     />
                   </div>
 
@@ -386,25 +492,6 @@ export default function AreaEditPage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">People</h2>
-              {/* <div className="inline-flex rounded border overflow-hidden">
-                {["COMMITTEE", "RENOWNED", "CONTACT"].map((tab) => (
-                  <button
-                    key={tab}
-                    className={`px-3 py-1.5 text-sm ${
-                      peopleTab === tab
-                        ? "bg-blue-600 text-white"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                    onClick={() => setPeopleTab(tab)}
-                  >
-                    {tab === "COMMITTEE"
-                      ? "Committee"
-                      : tab === "RENOWNED"
-                      ? "Important"
-                      : "Contacts"}
-                  </button>
-                ))}
-              </div> */}
             </div>
 
             <div className="rounded border bg-white p-3">

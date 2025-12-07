@@ -42,6 +42,7 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
   // --- Regular updates ---
   const set = {};
+
   if ("name" in body) {
     const name = String(body.name || "").trim();
     if (!name) {
@@ -52,10 +53,47 @@ export const PATCH = withPermApi(async (req, { params }) => {
     set.name = name;
     set.slug = GeoUnit.slugify(name);
   }
+
   if ("code" in body) set.code = String(body.code || "").trim();
   if ("active" in body) set.active = !!body.active;
   if ("sort" in body)
     set.sort = Number.isFinite(Number(body.sort)) ? Number(body.sort) : 0;
+
+  // 🔹 NEW: handle GeoJSON shape (Polygon / MultiPolygon)
+  if ("shape" in body) {
+    const raw = body.shape;
+
+    if (!raw) {
+      // clear shape
+      set.shape = null;
+    } else {
+      let geom = raw;
+
+      // support full Feature from geojson.io: { type: "Feature", geometry: { … } }
+      if (geom.type === "Feature" && geom.geometry) {
+        geom = geom.geometry;
+      }
+
+      if (
+        !geom ||
+        typeof geom !== "object" ||
+        !["Polygon", "MultiPolygon"].includes(geom.type) ||
+        !Array.isArray(geom.coordinates)
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid GeoJSON shape (Polygon/MultiPolygon expected)",
+          }),
+          { status: 400 }
+        );
+      }
+
+      set.shape = {
+        type: geom.type,
+        coordinates: geom.coordinates,
+      };
+    }
+  }
 
   // Re-parent (also recompute ancestors)
   if ("parentId" in body) {

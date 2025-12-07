@@ -7,7 +7,12 @@ import {
   useSearchParams,
   usePathname,
 } from "next/navigation";
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import {
+  GoogleMap,
+  Marker,
+  Polygon,
+  useJsApiLoader,
+} from "@react-google-maps/api"; // ⬅️ added Polygon
 
 /* ------------ helpers ------------ */
 
@@ -35,6 +40,70 @@ function pinDataUrl(color = "#2563eb") {
       </svg>
     `)
   );
+}
+
+/** --- GeoJSON helpers for shape -> Google Maps paths --- */
+
+// Safely extract a geometry object from geo.shape / geo.shapeGeometry / geo.geometry
+function getGeometryFromGeo(geo) {
+  if (!geo) return null;
+
+  let raw = geo.shape || geo.shapeGeometry || geo.geometry;
+  if (!raw) return null;
+
+  let g = raw;
+  if (typeof g === "string") {
+    try {
+      g = JSON.parse(g);
+    } catch {
+      return null;
+    }
+  }
+
+  // Handle FeatureCollection
+  if (g.type === "FeatureCollection" && Array.isArray(g.features)) {
+    const firstFeature = g.features.find(
+      (f) =>
+        f &&
+        f.geometry &&
+        (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon")
+    );
+    g = firstFeature ? firstFeature.geometry : null;
+  }
+
+  // Handle Feature
+  if (g && g.type === "Feature" && g.geometry) {
+    g = g.geometry;
+  }
+
+  if (!g || !g.type) return null;
+  return g;
+}
+
+// Convert Polygon / MultiPolygon coordinates to Google Maps paths
+function extractPolygonPaths(geometry) {
+  if (!geometry) return [];
+
+  const toLatLng = ([lng, lat]) => ({ lat, lng }); // GeoJSON is [lng, lat]
+
+  if (geometry.type === "Polygon") {
+    const rings = geometry.coordinates || [];
+    return rings.map((ring) => ring.map(toLatLng)); // [ [ {lat,lng} ] ]
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    const polys = geometry.coordinates || [];
+    // Only use the outer ring of each polygon for now
+    return polys
+      .map((poly) => {
+        const outer = poly[0];
+        if (!outer) return null;
+        return outer.map(toLatLng);
+      })
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 /* ------------ main page ------------ */
@@ -66,7 +135,7 @@ export default function GeoDetailPage() {
 
   // Load Google Maps
   const { isLoaded: mapLoaded } = useJsApiLoader({
-    id: "geo-detail-map",
+    id: "map-page-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   });
 
@@ -214,17 +283,36 @@ export default function GeoDetailPage() {
   const selectedCenter =
     centers.find((c) => String(c._id) === String(selectedCenterId)) || null;
 
+  // NEW: geometry + polygon paths from geo.shape / geo.geometry
+  const geometry = useMemo(() => getGeometryFromGeo(geo), [geo]);
+  const polygonPaths = useMemo(() => extractPolygonPaths(geometry), [geometry]);
+
   const mapCenter = useMemo(() => {
-    if (!centers.length) {
-      // Sylhet as a fallback center
-      return { lat: 24.8949, lng: 91.8687 };
+    if (centers.length) {
+      const lat =
+        centers.reduce((acc, c) => acc + (Number(c.lat) || 0), 0) /
+        centers.length;
+      const lng =
+        centers.reduce((acc, c) => acc + (Number(c.lng) || 0), 0) /
+        centers.length;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+      }
     }
-    const lat =
-      centers.reduce((acc, c) => acc + (c.lat || 0), 0) / centers.length;
-    const lng =
-      centers.reduce((acc, c) => acc + (c.lng || 0), 0) / centers.length;
-    return { lat, lng };
-  }, [centers]);
+
+    // Fallback: center of polygon if we have it
+    const flatPoly = polygonPaths.flat();
+    if (flatPoly.length) {
+      const lat = flatPoly.reduce((acc, p) => acc + p.lat, 0) / flatPoly.length;
+      const lng = flatPoly.reduce((acc, p) => acc + p.lng, 0) / flatPoly.length;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+      }
+    }
+
+    // Final fallback: Sylhet
+    return { lat: 24.8949, lng: 91.8687 };
+  }, [centers, polygonPaths]);
 
   const aggregates = useMemo(() => {
     const totalCenters = centers.length;
@@ -246,13 +334,27 @@ export default function GeoDetailPage() {
   /* ------------ Map behaviors ------------ */
 
   function onMapLoad(map) {
-    if (!centers.length) return;
+    const hasCenters = centers.length > 0;
+    const hasPoly = polygonPaths.length > 0;
+
+    if (!hasCenters && !hasPoly) return;
+
     const bounds = new window.google.maps.LatLngBounds();
-    centers.forEach((c) => {
-      if (typeof c.lat === "number" && typeof c.lng === "number") {
-        bounds.extend({ lat: c.lat, lng: c.lng });
-      }
-    });
+
+    if (hasCenters) {
+      centers.forEach((c) => {
+        if (typeof c.lat === "number" && typeof c.lng === "number") {
+          bounds.extend({ lat: c.lat, lng: c.lng });
+        }
+      });
+    }
+
+    if (hasPoly) {
+      polygonPaths.forEach((ring) => {
+        ring.forEach((p) => bounds.extend(p));
+      });
+    }
+
     if (!bounds.isEmpty()) {
       map.fitBounds(bounds);
     }
@@ -345,9 +447,9 @@ export default function GeoDetailPage() {
             <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">
               Loading map…
             </div>
-          ) : !centers.length ? (
+          ) : !centers.length && !polygonPaths.length ? (
             <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">
-              No centers found in this area.
+              No centers or polygon found in this area.
             </div>
           ) : (
             <GoogleMap
@@ -364,6 +466,23 @@ export default function GeoDetailPage() {
                 backgroundColor: "#f7f7f7",
               }}
             >
+              {/* NEW: polygon shape if available */}
+              {polygonPaths.length > 0 && (
+                <Polygon
+                  paths={polygonPaths}
+                  options={{
+                    strokeColor: "#ff0000", // RED BORDER
+                    strokeOpacity: 1.0,
+                    strokeWeight: 2,
+                    fillColor: "#ff0000", // same color but completely transparent
+                    fillOpacity: 0.0, // TRANSPARENT INSIDE
+                    clickable: false,
+                    zIndex: 5,
+                  }}
+                />
+              )}
+
+              {/* Existing markers */}
               {centers.map((c) => {
                 if (typeof c.lat !== "number" || typeof c.lng !== "number") {
                   return null;
@@ -395,7 +514,7 @@ export default function GeoDetailPage() {
                         isSelected ? "marker-badge--selected" : ""
                       }`,
                     }}
-                    zIndex={isSelected ? 999 : 1}
+                    zIndex={isSelected ? 999 : 10}
                   />
                 );
               })}
