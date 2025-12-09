@@ -1,6 +1,8 @@
 // app/api/stats/voters/route.js
 import dbConnect from "@/lib/db";
 import Center from "@/models/Center";
+import Area from "@/models/Area";
+import GeoUnit from "@/models/GeoUnit";
 import { withPermApi } from "@/lib/rbac";
 import mongoose from "mongoose";
 
@@ -25,19 +27,22 @@ function toObjIdOrNull(v, name) {
 /**
  * GET /api/stats/voters
  *
- * Accepted query params:
+ * Filters:
  * - cityId OR city_corporation
  * - upazilaId OR upazila
  * - unionId OR union
  * - wardId OR ward
  *
- * Examples:
- * - /api/stats/voters                          → all centers
- * - /api/stats/voters?cityId=...               → a city corporation (optionally add wardId)
- * - /api/stats/voters?city_corporation=...&ward=...  → city ward
- * - /api/stats/voters?upazilaId=...           → an upazila
- * - /api/stats/voters?upazila=...&union=...   → a union in that upazila
- * - /api/stats/voters?upazila=...&union=...&ward=... → a rural ward
+ * Returns:
+ * {
+ *   filters: { ... },
+ *   centers: <number>,           // total centers in filter
+ *   totals: { total, male, female },
+ *   topCenters: [ { _id, name, totalVoters, maleVoters, femaleVoters, address } ],
+ *   topAreas:   [ { _id, name, totalVoters, centerId, centerName } ],
+ *   topWards:   [ { wardId, wardName, centers, totalVoters, maleVoters, femaleVoters } ],
+ *   topUnions:  [ { unionId, unionName, centers, totalVoters, maleVoters, femaleVoters } ],
+ * }
  */
 export const GET = withPermApi(async (req) => {
   await dbConnect();
@@ -51,7 +56,7 @@ export const GET = withPermApi(async (req) => {
   const wardIdStr = pickId(searchParams, ["wardId", "ward"]);
 
   try {
-    // Validate exclusivity of top-level: allow EITHER city path OR upazila path (or none)
+    // Allow EITHER city path OR upazila path (or none)
     if (cityIdStr && upazilaIdStr) {
       return new Response(
         JSON.stringify({
@@ -67,15 +72,15 @@ export const GET = withPermApi(async (req) => {
     const unionId = toObjIdOrNull(unionIdStr, "unionId");
     const wardId = toObjIdOrNull(wardIdStr, "wardId");
 
-    // Build match filter
+    // ---- Common match filter for Centers ----
     const match = {};
     if (cityId) match.cityId = cityId;
     if (upazilaId) match.upazilaId = upazilaId;
     if (unionId) match.unionId = unionId;
     if (wardId) match.wardId = wardId;
 
-    // Aggregate totals
-    const [agg] = await Center.aggregate([
+    // =============== MAIN TOTALS ===============
+    const [aggTotals] = await Center.aggregate([
       { $match: match },
       {
         $group: {
@@ -88,6 +93,156 @@ export const GET = withPermApi(async (req) => {
       },
     ]);
 
+    const totalCenters = aggTotals?.centers ?? 0;
+    const totals = {
+      total: aggTotals?.totalVoters ?? 0,
+      male: aggTotals?.maleVoters ?? 0,
+      female: aggTotals?.femaleVoters ?? 0,
+    };
+
+    // =============== TOP 10 CENTERS ===============
+    const topCentersAgg = await Center.aggregate([
+      { $match: match },
+      {
+        $addFields: {
+          _totalVoters: { $ifNull: ["$totalVoters", 0] },
+          _maleVoters: { $ifNull: ["$maleVoters", 0] },
+          _femaleVoters: { $ifNull: ["$femaleVoters", 0] },
+        },
+      },
+      { $sort: { _totalVoters: -1, name: 1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          address: 1,
+          totalVoters: "$_totalVoters",
+          maleVoters: "$_maleVoters",
+          femaleVoters: "$_femaleVoters",
+        },
+      },
+    ]);
+
+    const topCenters = topCentersAgg || [];
+
+    // =============== TOP 10 AREAS (inside filtered centers) ===============
+    // First, find all centers in filter to get IDs for Area match
+    const centerIdsForAreas = await Center.find(match)
+      .select("_id")
+      .lean()
+      .then((docs) => docs.map((d) => d._id));
+
+    let topAreas = [];
+    if (centerIdsForAreas.length > 0) {
+      const topAreasAgg = await Area.aggregate([
+        { $match: { center: { $in: centerIdsForAreas } } },
+        {
+          $addFields: {
+            _totalVoters: { $ifNull: ["$totalVoters", 0] },
+          },
+        },
+        { $sort: { _totalVoters: -1, name: 1 } },
+        { $limit: 10 },
+        {
+          $lookup: {
+            from: "centers",
+            localField: "center",
+            foreignField: "_id",
+            as: "_center",
+          },
+        },
+        { $unwind: { path: "$_center", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            totalVoters: "$_totalVoters",
+            centerId: "$center",
+            centerName: "$_center.name",
+          },
+        },
+      ]);
+      topAreas = topAreasAgg || [];
+    }
+
+    // =============== TOP 10 WARDS ===============
+    // Group centers by wardId and sum voters
+    const topWardsAgg = await Center.aggregate([
+      { $match: match },
+      { $match: { wardId: { $ne: null } } },
+      {
+        $group: {
+          _id: "$wardId",
+          centers: { $sum: 1 },
+          totalVoters: { $sum: { $ifNull: ["$totalVoters", 0] } },
+          maleVoters: { $sum: { $ifNull: ["$maleVoters", 0] } },
+          femaleVoters: { $sum: { $ifNull: ["$femaleVoters", 0] } },
+        },
+      },
+      { $sort: { totalVoters: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "geounits",
+          localField: "_id",
+          foreignField: "_id",
+          as: "ward",
+        },
+      },
+      { $unwind: { path: "$ward", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          wardId: "$_id",
+          wardName: "$ward.name",
+          centers: 1,
+          totalVoters: 1,
+          maleVoters: 1,
+          femaleVoters: 1,
+        },
+      },
+    ]);
+
+    const topWards = topWardsAgg || [];
+
+    // =============== TOP 10 UNIONS ===============
+    const topUnionsAgg = await Center.aggregate([
+      { $match: match },
+      { $match: { unionId: { $ne: null } } },
+      {
+        $group: {
+          _id: "$unionId",
+          centers: { $sum: 1 },
+          totalVoters: { $sum: { $ifNull: ["$totalVoters", 0] } },
+          maleVoters: { $sum: { $ifNull: ["$maleVoters", 0] } },
+          femaleVoters: { $sum: { $ifNull: ["$femaleVoters", 0] } },
+        },
+      },
+      { $sort: { totalVoters: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "geounits",
+          localField: "_id",
+          foreignField: "_id",
+          as: "union",
+        },
+      },
+      { $unwind: { path: "$union", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          unionId: "$_id",
+          unionName: "$union.name",
+          centers: 1,
+          totalVoters: 1,
+          maleVoters: 1,
+          femaleVoters: 1,
+        },
+      },
+    ]);
+
+    const topUnions = topUnionsAgg || [];
+
     const result = {
       filters: {
         cityId: cityId?.toString() || null,
@@ -95,12 +250,12 @@ export const GET = withPermApi(async (req) => {
         unionId: unionId?.toString() || null,
         wardId: wardId?.toString() || null,
       },
-      centers: agg?.centers ?? 0,
-      totals: {
-        total: agg?.totalVoters ?? 0,
-        male: agg?.maleVoters ?? 0,
-        female: agg?.femaleVoters ?? 0,
-      },
+      centers: totalCenters,
+      totals,
+      topCenters,
+      topAreas,
+      topWards,
+      topUnions,
     };
 
     return new Response(JSON.stringify(result), {
@@ -110,11 +265,11 @@ export const GET = withPermApi(async (req) => {
   } catch (err) {
     return new Response(
       JSON.stringify({
-        error: err?.message || "Failed to compute voter totals",
+        error: err?.message || "Failed to compute voter stats",
       }),
       {
         status: 400,
       }
     );
   }
-}, "view_centers");
+}, "*");

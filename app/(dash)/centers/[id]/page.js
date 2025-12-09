@@ -228,7 +228,9 @@ export default function CenterDetailsPage() {
           {center?.cityId != null && (
             <h2 className="text-lg text-gray-700">
               City: {center.cityId.name}{" "}
-              {center?.wardId ? `· Ward: ${center.wardId.name}` : ""}
+              <a href={`/geo/${center?.wardId?._id}`} className="text-blue-600">
+                {center?.wardId ? `· Ward: ${center.wardId.name}` : ""}
+              </a>
             </h2>
           )}
           {center?.upazilaId != null && (

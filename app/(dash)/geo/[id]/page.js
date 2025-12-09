@@ -248,7 +248,7 @@ export default function GeoDetailPage() {
 
         // We want all centers in this geo unit for map + list
         const qs = params.length
-          ? `?${params.join("&")}&limit=500`
+          ? `?${params.join("&")}&limit=500&sort=totalVoters&dir=desc`
           : "?limit=500";
         const j = await fetchJSON(`/api/centers${qs}`);
 

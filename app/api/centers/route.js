@@ -37,6 +37,24 @@ export const GET = withPermApi(async (req) => {
   if (unionId) filter.unionId = unionId;
   if (wardId) filter.wardId = wardId;
 
+  // Voter range filter: vr=min-max (e.g. "0-500", "500-1500", "3000-999999")
+  const vr = (searchParams.get("vr") || "").trim();
+  if (vr) {
+    const parts = vr.split("-");
+    if (parts.length === 2) {
+      const min = Number(parts[0]);
+      const max = Number(parts[1]);
+      const voterFilter = {};
+
+      if (!Number.isNaN(min)) voterFilter.$gte = min;
+      if (!Number.isNaN(max)) voterFilter.$lte = max;
+
+      if (Object.keys(voterFilter).length > 0) {
+        filter.totalVoters = voterFilter;
+      }
+    }
+  }
+
   if (q) {
     const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
 

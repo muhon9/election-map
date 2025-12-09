@@ -22,6 +22,7 @@ export default function DashboardShell({ children, showAdmin }) {
     { href: "/areas", label: "Areas" },
     { href: "/geo/list", label: "Ward / Union" },
     { href: "/committees", label: "Committees" },
+    { href: "/stats", label: "Stats" },
     // ...(showAdmin ? [{ href: "/areas", label: "Areas" }] : []),
     // { href: "/mosq-map", label: "Mosq Map" },
     // { href: "/mosqs", label: "Mosqs" },
