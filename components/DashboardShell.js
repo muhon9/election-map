@@ -17,15 +17,16 @@ export default function DashboardShell({ children, showAdmin }) {
   }, [open]);
 
   const nav = [
-    { href: "/", label: "Dashboard" },
+    { href: "/", label: "Map Viewer" },
     { href: "/centers", label: "Centers" },
+    { href: "/areas", label: "Areas" },
+    { href: "/geo/list", label: "Ward / Union" },
     { href: "/committees", label: "Committees" },
-    { href: "/geo/list", label: "Geo List" },
+    // ...(showAdmin ? [{ href: "/areas", label: "Areas" }] : []),
     // { href: "/mosq-map", label: "Mosq Map" },
     // { href: "/mosqs", label: "Mosqs" },
     { href: "/persons", label: "Persons" },
     // ...(showAdmin ? [{ href: "/persons", label: "Persons" }] : []),
-    ...(showAdmin ? [{ href: "/areas", label: "Areas" }] : []),
     ...(showAdmin ? [{ href: "/users", label: "Users" }] : []),
     ...(showAdmin ? [{ href: "/roles", label: "Rules" }] : []),
     ...(showAdmin ? [{ href: "/geo", label: "Administration" }] : []),
@@ -90,7 +91,7 @@ export default function DashboardShell({ children, showAdmin }) {
       {/* Drawer / Sidebar */}
       <aside
         className={`
-          fixed z-50 top-0 left-0 h-full w-72 bg-white border-r p-3
+          fixed z-50 top-0 left-0 h-full w-56 bg-white border-r p-3
           transform transition-transform md:translate-x-0
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -121,7 +122,7 @@ export default function DashboardShell({ children, showAdmin }) {
       <div className="hidden md:block md:fixed md:top-0 md:left-0 md:h-full md:w-72" />
 
       {/* Main content */}
-      <main className="md:ml-72 p-4">{children}</main>
+      <main className="md:ml-56 p-4">{children}</main>
     </div>
   );
 }

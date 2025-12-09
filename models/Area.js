@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Center from "./Center";
 
 const AreaSchema = new mongoose.Schema(
   {
@@ -8,8 +9,9 @@ const AreaSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     name: { type: String, required: true, index: true },
-    code: { type: String, default: "" }, // optional identifier
+    code: { type: String, default: "" },
 
     // voters at area level
     totalVoters: { type: Number, default: 0 },
@@ -18,22 +20,35 @@ const AreaSchema = new mongoose.Schema(
 
     notes: { type: String, default: "" },
 
-    // GeoJSON polygon / multipolygon for this area (same style as GeoUnit)
+    // -------- GEO SHAPES --------
+    // Polygon or MultiPolygon (optional)
     shape: {
       type: {
         type: String,
         enum: ["Polygon", "MultiPolygon"],
         default: undefined,
       },
-      // For Polygon:   [ [ [lng, lat], ... ] ]
-      // For MultiPoly: [ [ [ [lng, lat], ... ] ] ]
       coordinates: {
         type: Array,
-        default: undefined, // omit field if empty, keeps docs clean
+        default: undefined,
       },
-      // Optional: original GeoJSON from geojson.io if you want to keep it
       rawGeoJSON: {
         type: mongoose.Schema.Types.Mixed,
+        default: undefined,
+      },
+    },
+
+    // -------- FALLBACK POINT --------
+    // If polygon is not available, show a marker
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: undefined,
+      },
+      // [lng, lat]
+      coordinates: {
+        type: [Number],
         default: undefined,
       },
     },
@@ -44,10 +59,11 @@ const AreaSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// full-text search
+// Text search
 AreaSchema.index({ name: "text", code: "text" });
 
-// geo index for polygon queries (contains, intersect, etc.)
+// Geo indexes
 AreaSchema.index({ shape: "2dsphere" });
+AreaSchema.index({ location: "2dsphere" });
 
 export default mongoose.models.Area || mongoose.model("Area", AreaSchema);

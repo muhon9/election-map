@@ -30,7 +30,9 @@ export default function AreaEditPage() {
     maleVoters: "",
     femaleVoters: "",
     notes: "",
-    shapeJson: "", // NEW: raw GeoJSON text
+    shapeJson: "", // raw GeoJSON text
+    locationLat: "",
+    locationLng: "",
   });
 
   // Selected People tab (URL-driven and reactive)
@@ -39,6 +41,7 @@ export default function AreaEditPage() {
   const [peopleTab, setPeopleTab] = useState(
     validTabs.includes(tabParam) ? tabParam : "COMMITTEE"
   );
+
   useEffect(() => {
     const t = (sp.get("tab") || sp.get("add") || "").toUpperCase();
     if (validTabs.includes(t)) setPeopleTab(t);
@@ -81,13 +84,26 @@ export default function AreaEditPage() {
           if (j.shape.rawGeoJSON) {
             shapeJson = JSON.stringify(j.shape.rawGeoJSON, null, 2);
           } else {
-            // fallback: store shape itself
             shapeJson = JSON.stringify(
               { type: j.shape.type, coordinates: j.shape.coordinates },
               null,
               2
             );
           }
+        }
+
+        // Prepare location lat/lng (GeoJSON Point: [lng, lat])
+        let locationLat = "";
+        let locationLng = "";
+        if (
+          j.location &&
+          j.location.type === "Point" &&
+          Array.isArray(j.location.coordinates) &&
+          j.location.coordinates.length === 2
+        ) {
+          const [lng, lat] = j.location.coordinates;
+          locationLat = lat ?? "";
+          locationLng = lng ?? "";
         }
 
         setForm({
@@ -98,6 +114,8 @@ export default function AreaEditPage() {
           femaleVoters: j.femaleVoters ?? "",
           notes: j.notes || "",
           shapeJson,
+          locationLat: locationLat === "" ? "" : String(locationLat),
+          locationLng: locationLng === "" ? "" : String(locationLng),
         });
       } catch (e) {
         if (!alive) return;
@@ -177,14 +195,42 @@ export default function AreaEditPage() {
           coordinates: geom.coordinates,
           rawGeoJSON: parsed,
         };
-      } catch (e) {
-        console.error(e);
+      } catch (e2) {
+        console.error(e2);
         alert("Invalid GeoJSON in shape field. Please check your JSON.");
         return;
       }
     } else {
       // explicitly clear shape if empty
       payload.shape = null;
+    }
+
+    // Location handling (lat/lng -> GeoJSON Point)
+    const latStr = (form.locationLat || "").trim();
+    const lngStr = (form.locationLng || "").trim();
+    if (latStr || lngStr) {
+      const lat = Number(latStr);
+      const lng = Number(lngStr);
+      if (
+        Number.isNaN(lat) ||
+        Number.isNaN(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        alert(
+          "Location must have valid numeric latitude (-90..90) and longitude (-180..180)."
+        );
+        return;
+      }
+      payload.location = {
+        type: "Point",
+        coordinates: [lng, lat],
+      };
+    } else {
+      // clear location if both empty
+      payload.location = null;
     }
 
     // Soft validation
@@ -207,7 +253,7 @@ export default function AreaEditPage() {
       }
       setArea(j);
 
-      // Re-sync form (also recompute shape JSON from response)
+      // Re-sync form (including shape + location)
       let shapeJson = "";
       if (j.shape) {
         if (j.shape.rawGeoJSON) {
@@ -221,6 +267,19 @@ export default function AreaEditPage() {
         }
       }
 
+      let locationLat = "";
+      let locationLng = "";
+      if (
+        j.location &&
+        j.location.type === "Point" &&
+        Array.isArray(j.location.coordinates) &&
+        j.location.coordinates.length === 2
+      ) {
+        const [lng2, lat2] = j.location.coordinates;
+        locationLat = lat2 ?? "";
+        locationLng = lng2 ?? "";
+      }
+
       setForm({
         name: j.name || "",
         code: j.code || "",
@@ -229,6 +288,8 @@ export default function AreaEditPage() {
         femaleVoters: j.femaleVoters ?? "",
         notes: j.notes || "",
         shapeJson,
+        locationLat: locationLat === "" ? "" : String(locationLat),
+        locationLng: locationLng === "" ? "" : String(locationLng),
       });
       alert("Area updated.");
     } finally {
@@ -439,7 +500,55 @@ export default function AreaEditPage() {
                     />
                   </div>
 
-                  {/* NEW: Shape GeoJSON textarea */}
+                  {/* NEW: Location lat/lng */}
+                  <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Location latitude
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        className="border rounded w-full px-3 py-2"
+                        value={form.locationLat}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            locationLat: e.target.value,
+                          }))
+                        }
+                        disabled={!canEdit}
+                        placeholder="24.89…"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Location longitude
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        className="border rounded w-full px-3 py-2"
+                        value={form.locationLng}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            locationLng: e.target.value,
+                          }))
+                        }
+                        disabled={!canEdit}
+                        placeholder="91.86…"
+                      />
+                    </div>
+                    <div className="text-[11px] text-gray-500 flex items-end">
+                      <p>
+                        Optional marker if no polygon. Leave both empty to clear
+                        location.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Shape GeoJSON textarea */}
                   <div className="md:col-span-3">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Area shape (GeoJSON)
@@ -495,7 +604,6 @@ export default function AreaEditPage() {
             </div>
 
             <div className="rounded border bg-white p-3">
-              {/* Committee: hide designation + order fields per your request */}
               <PeopleEditor
                 areaId={String(id)}
                 defaultCategory={peopleTab}

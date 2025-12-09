@@ -22,8 +22,8 @@ export default function CentersPage() {
   const initPage = parseInt(sp.get("page") || "1", 10);
   const initLimit = parseInt(sp.get("limit") || "10", 10);
   const initQ = sp.get("q") || "";
-  const initSort = sp.get("sort") || "createdAt";
-  const initDir = sp.get("dir") || "asc";
+  const initSort = sp.get("sort") || "totalVoters";
+  const initDir = sp.get("dir") || "desc";
 
   const [page, setPage] = useState(initPage);
   const [limit, setLimit] = useState(initLimit);

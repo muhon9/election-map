@@ -75,11 +75,48 @@ export const PATCH = withPermApi(async (req, { params }) => {
         );
       }
 
-      // Store minimal clean structure (+ optional rawGeoJSON if you pass it)
       set.shape = {
         type,
         coordinates: coords,
         ...(s.rawGeoJSON ? { rawGeoJSON: s.rawGeoJSON } : {}),
+      };
+    }
+  }
+
+  // Location (GeoJSON Point) - fallback marker when no polygon
+  if ("location" in body) {
+    const loc = body.location;
+
+    // Clear location
+    if (loc === null || loc === undefined || loc === "") {
+      unset.location = "";
+    } else {
+      const type = loc.type;
+      const coords = loc.coordinates;
+
+      if (!type || type !== "Point") {
+        return new Response(
+          JSON.stringify({ error: "location.type must be Point" }),
+          { status: 400 }
+        );
+      }
+
+      if (
+        !Array.isArray(coords) ||
+        coords.length !== 2 ||
+        !coords.every((n) => typeof n === "number" && Number.isFinite(n))
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: "location.coordinates must be [lng, lat] as finite numbers",
+          }),
+          { status: 400 }
+        );
+      }
+
+      set.location = {
+        type: "Point",
+        coordinates: coords,
       };
     }
   }

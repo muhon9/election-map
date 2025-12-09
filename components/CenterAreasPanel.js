@@ -57,7 +57,7 @@ export default function CenterAreasPanel({ center }) {
             <th className="text-left p-2 w-[42px]"> </th>
             <th className="text-left p-2">Area</th>
             <th className="text-left p-2">Voters</th>
-            <th className="text-left p-2 w-[240px]">Actions</th>
+            {/* <th className="text-left p-2 w-[240px]">Actions</th> */}
           </tr>
         </thead>
         <tbody>
@@ -191,7 +191,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
           <span className="text-gray-500 ml-2">F:</span>{" "}
           {area.femaleVoters ?? 0}
         </td>
-        <td className="p-2">
+        {/* <td className="p-2">
           <div className="flex items-center gap-2">
             <a
               className="px-2 py-1 border rounded hover:bg-gray-50"
@@ -208,7 +208,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
               </a>
             )}
           </div>
-        </td>
+        </td> */}
       </tr>
 
       {isOpen && (
