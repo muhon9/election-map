@@ -388,12 +388,97 @@ export default function CommitteeForm({ committee = null, onSaved }) {
         setPendingFile(null);
         // optionally refresh to show new people counts etc.
         router.refresh();
+        // Also refetch members list below
+        await loadMembersForCommittee();
       }
     } catch (err) {
       console.error(err);
       setImportErr("Network error during import");
     } finally {
       setImporting(false);
+    }
+  }
+
+  // ---------- Committee Members (list + bulk delete) ----------
+
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersErr, setMembersErr] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+  const [membersDeleting, setMembersDeleting] = useState(false);
+
+  async function loadMembersForCommittee() {
+    if (!committee?._id) return;
+    setMembersLoading(true);
+    setMembersErr("");
+    try {
+      // adjust this URL if your API is different
+      const j = await fetchJSON(
+        `/api/people?committeeId=${committee._id}&category=COMMITTEE&limit=500&sort=order&dir=asc`
+      );
+      const items = Array.isArray(j.items) ? j.items : j;
+      setMembers(items || []);
+      setSelectedMemberIds([]);
+    } catch (e) {
+      console.error(e);
+      setMembersErr(e.message || "Failed to load committee members");
+      setMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!committee?._id) return;
+    loadMembersForCommittee();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?._id]);
+
+  function toggleMemberSelection(id) {
+    setSelectedMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleSelectAllMembers() {
+    if (selectedMemberIds.length === members.length) {
+      setSelectedMemberIds([]);
+    } else {
+      setSelectedMemberIds(members.map((m) => m._id));
+    }
+  }
+
+  async function handleDeleteSelectedMembers() {
+    if (!selectedMemberIds.length) {
+      alert("No members selected.");
+      return;
+    }
+    if (
+      !confirm(
+        `Delete ${selectedMemberIds.length} selected member(s) from this committee? This cannot be undone.`
+      )
+    )
+      return;
+
+    setMembersDeleting(true);
+    try {
+      // delete one by one using existing API
+      await Promise.all(
+        selectedMemberIds.map((id) =>
+          fetch(`/api/people/${id}`, { method: "DELETE" })
+        )
+      );
+      // remove from UI
+      setMembers((prev) =>
+        prev.filter((m) => !selectedMemberIds.includes(m._id))
+      );
+      setSelectedMemberIds([]);
+      router.refresh();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete some members. Please refresh and try again.");
+    } finally {
+      setMembersDeleting(false);
     }
   }
 
@@ -860,6 +945,101 @@ export default function CommitteeForm({ committee = null, onSaved }) {
                 </div>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Committee Members list + bulk delete */}
+      {committee?._id && (
+        <div className="space-y-2 border-t pt-4 mt-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">Committee Members</h3>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              {membersLoading && <span>Loading members…</span>}
+              {!membersLoading && (
+                <span>
+                  {members.length} member{members.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {membersErr && (
+            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {membersErr}
+            </div>
+          )}
+
+          {!membersLoading && !membersErr && members.length === 0 && (
+            <div className="text-sm text-gray-500">
+              No members linked to this committee yet.
+            </div>
+          )}
+
+          {!membersLoading && members.length > 0 && (
+            <>
+              <div className="overflow-x-auto border rounded bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="p-2 text-left">
+                        <input
+                          type="checkbox"
+                          checked={
+                            selectedMemberIds.length === members.length &&
+                            members.length > 0
+                          }
+                          onChange={toggleSelectAllMembers}
+                        />
+                      </th>
+                      <th className="p-2 text-left">Name</th>
+                      <th className="p-2 text-left">Position</th>
+                      <th className="p-2 text-left">Mobile</th>
+                      <th className="p-2 text-right">Order</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((m) => (
+                      <tr key={m._id} className="border-t">
+                        <td className="p-2 align-top">
+                          <input
+                            type="checkbox"
+                            checked={selectedMemberIds.includes(m._id)}
+                            onChange={() => toggleMemberSelection(m._id)}
+                          />
+                        </td>
+                        <td className="p-2 align-top">
+                          <div className="font-medium">{m.name}</div>
+                        </td>
+                        <td className="p-2 align-top">
+                          {m.position || m.designation || "—"}
+                        </td>
+                        <td className="p-2 align-top">
+                          {m.phone || m.mobile || "—"}
+                        </td>
+                        <td className="p-2 align-top text-right">
+                          {typeof m.order === "number" ? m.order : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between mt-2">
+                <div className="text-xs text-gray-600">
+                  Selected: {selectedMemberIds.length}
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 border border-red-200 text-red-700 rounded text-xs hover:bg-red-50 disabled:opacity-60"
+                  onClick={handleDeleteSelectedMembers}
+                  disabled={membersDeleting || selectedMemberIds.length === 0}
+                >
+                  {membersDeleting ? "Deleting…" : "Delete selected members"}
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}

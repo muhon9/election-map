@@ -22,11 +22,11 @@ export default function DashboardShell({ children, showAdmin }) {
     { href: "/areas", label: "Areas" },
     { href: "/geo/list", label: "Ward / Union" },
     { href: "/committees", label: "Committees" },
-    { href: "/stats", label: "Stats" },
     // ...(showAdmin ? [{ href: "/areas", label: "Areas" }] : []),
     // { href: "/mosq-map", label: "Mosq Map" },
     // { href: "/mosqs", label: "Mosqs" },
     { href: "/persons", label: "Persons" },
+    { href: "/stats", label: "Stats" },
     // ...(showAdmin ? [{ href: "/persons", label: "Persons" }] : []),
     ...(showAdmin ? [{ href: "/users", label: "Users" }] : []),
     ...(showAdmin ? [{ href: "/roles", label: "Rules" }] : []),
@@ -120,7 +120,7 @@ export default function DashboardShell({ children, showAdmin }) {
       </aside>
 
       {/* Reserve sidebar width on desktop */}
-      <div className="hidden md:block md:fixed md:top-0 md:left-0 md:h-full md:w-72" />
+      <div className="hidden md:block md:fixed md:top-0 md:left-0 md:h-full md:w-56" />
 
       {/* Main content */}
       <main className="md:ml-56 p-4">{children}</main>

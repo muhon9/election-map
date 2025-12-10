@@ -175,4 +175,4 @@ export const GET = withPermApi(async (req, { params }) => {
       status: 404,
     });
   return Response.json(doc);
-}, "manage_roles");
+}, "*");

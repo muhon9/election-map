@@ -141,7 +141,7 @@ export const PATCH = withPermApi(
 // DELETE /api/people/:personId
 export const DELETE = withPermApi(async (_req, { params }) => {
   await dbConnect();
-
+  console.log("hit", params.personId);
   const id = oid(params.personId);
   if (!id) {
     return new Response(JSON.stringify({ error: "Invalid id" }), {

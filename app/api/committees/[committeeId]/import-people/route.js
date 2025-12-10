@@ -207,13 +207,13 @@ export const POST = withPermApi(async (req, { params }) => {
 
       // 1️⃣ Only update if a person matched with phone number in that committee
       let existing = null;
-      if (phone) {
-        existing = await Person.findOne({ committeeId, phone }).lean(
-          isDry ? true : false
-        );
-        // note: .lean(true) ignored by mongoose; but .lean() only matters if not dry.
-        // We'll just do .findOne normally above and conditionally use .lean() if you prefer.
-      }
+      // if (phone) {
+      //   existing = await Person.findOne({ committeeId, phone }).lean(
+      //     isDry ? true : false
+      //   );
+      //   // note: .lean(true) ignored by mongoose; but .lean() only matters if not dry.
+      //   // We'll just do .findOne normally above and conditionally use .lean() if you prefer.
+      // }
 
       const updateBase = {
         name,

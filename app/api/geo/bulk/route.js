@@ -87,6 +87,7 @@ export const POST = withPermApi(async (req) => {
 
   const errors = [];
   const docs = [];
+  console.log("req body", rows);
 
   // First pass: validate & build docs
   for (let i = 0; i < rows.length; i++) {
@@ -156,7 +157,7 @@ export const POST = withPermApi(async (req) => {
       const ancestors = parentDoc
         ? [...(parentDoc.ancestors || []), parentDoc._id]
         : [];
-
+      console.log("parent doc", parentDoc);
       // duplicate check
       const dupe = await GeoUnit.findOne({
         type: d.type,
@@ -180,6 +181,7 @@ export const POST = withPermApi(async (req) => {
         ancestors,
         sort: d.sort,
         active: d.active,
+        shape: null,
       });
 
       // add to index (in case subsequent rows use this as parent)
