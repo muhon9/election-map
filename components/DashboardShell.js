@@ -32,6 +32,9 @@ export default function DashboardShell({ children, showAdmin }) {
     ...(showAdmin ? [{ href: "/roles", label: "Rules" }] : []),
     ...(showAdmin ? [{ href: "/geo", label: "Administration" }] : []),
     ...(showAdmin ? [{ href: "/backup", label: "Backup" }] : []),
+    ...(showAdmin
+      ? [{ href: "/committee-types", label: "Committee Types" }]
+      : []),
     // { href: "/settings", label: "Settings" },
   ];
 

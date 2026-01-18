@@ -332,12 +332,12 @@ export default function MapPage() {
   const selectedCenter = useMemo(
     () =>
       centers.find((c) => String(c._id) === String(selectedCenterId)) || null,
-    [centers, selectedCenterId]
+    [centers, selectedCenterId],
   );
 
   const selectedArea = useMemo(
     () => areas.find((a) => String(a._id) === String(selectedAreaId)) || null,
-    [areas, selectedAreaId]
+    [areas, selectedAreaId],
   );
 
   // ---- Load areas for selected center (when showAreas is ON) ----
@@ -359,7 +359,7 @@ export default function MapPage() {
         setSelectedAreaId("");
 
         const qs = `?centerId=${encodeURIComponent(
-          selectedCenter._id
+          selectedCenter._id,
         )}&limit=500`;
         const j = await fetchJSON(`/api/areas${qs}`);
         if (!alive) return;
@@ -700,10 +700,10 @@ export default function MapPage() {
             {loadingGeo
               ? "Loading locations…"
               : loadingCenters
-              ? "Loading centers…"
-              : centers.length
-              ? `${centers.length} centers`
-              : "Select filter to see centers"}
+                ? "Loading centers…"
+                : centers.length
+                  ? `${centers.length} centers`
+                  : "Select filter to see centers"}
           </div>
         </div>
 
@@ -713,10 +713,10 @@ export default function MapPage() {
             {loadingAreas
               ? "Loading areas for this center…"
               : areasErr
-              ? areasErr
-              : areas.length
-              ? `${areas.length} areas for this center`
-              : "No areas with location for this center."}
+                ? areasErr
+                : areas.length
+                  ? `${areas.length} areas for this center`
+                  : "No areas with location for this center."}
           </div>
         )}
       </div>
@@ -1018,7 +1018,7 @@ export default function MapPage() {
           {/* Areas & People for selected center */}
           {selectedCenter && (
             <div className="pt-2 border-t mt-2">
-              <h3 className="font-semibold mb-1">Areas & People</h3>
+              <h3 className="font-semibold mb-1">Areas</h3>
               <CenterAreasPanel center={selectedCenter} />
             </div>
           )}

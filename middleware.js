@@ -19,5 +19,6 @@ export const config = {
     "/geo/",
     "/admin/:path*",
     "/change-password",
+    "/committee-types/:path*",
   ],
 };

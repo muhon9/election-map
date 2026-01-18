@@ -32,7 +32,7 @@ export default function CenterAreasPanel({ center }) {
       // Pull first 200 to keep things simple. Adjust if you expect more.
       const res = await fetch(
         `/api/centers/${cid}/areas?page=1&limit=200&sort=totalVoters&dir=desc`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
       const j = await res.json();
       if (!Array.isArray(j.items)) {
@@ -51,10 +51,10 @@ export default function CenterAreasPanel({ center }) {
 
   return (
     <div className="rounded border overflow-scroll bg-white">
-      <table className="min-w-[900px] w-full text-sm">
+      <table className="min-w-[300px] w-full text-sm">
         <thead className="bg-gray-100">
           <tr>
-            <th className="text-left p-2 w-[42px]"> </th>
+            {/* <th className="text-left p-2 w-[42px]"> </th> */}
             <th className="text-left p-2">Area</th>
             <th className="text-left p-2">Voters</th>
             {/* <th className="text-left p-2 w-[240px]">Actions</th> */}
@@ -91,7 +91,7 @@ export default function CenterAreasPanel({ center }) {
                 isOpen={openAreaId === String(a._id)}
                 onToggle={() =>
                   setOpenAreaId((id) =>
-                    id === String(a._id) ? null : String(a._id)
+                    id === String(a._id) ? null : String(a._id),
                   )
                 }
                 canEdit={canEdit}
@@ -136,15 +136,15 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
         const [c, r, k] = await Promise.all([
           fetch(
             `/api/committees?areaId=${area._id}&limit=${TOP_N}&sort=createdAt&dir=desc`,
-            { cache: "no-store" }
+            { cache: "no-store" },
           ).then((r) => r.json()),
           fetch(
             `/api/areas/${area._id}/people?category=RENOWNED&limit=${TOP_N}&sort=importance&dir=desc`,
-            { cache: "no-store" }
+            { cache: "no-store" },
           ).then((r) => r.json()),
           fetch(
             `/api/areas/${area._id}/people?category=CONTACT&limit=${TOP_N}&sort=name&dir=asc`,
-            { cache: "no-store" }
+            { cache: "no-store" },
           ).then((r) => r.json()),
         ]);
 
@@ -175,7 +175,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
   return (
     <>
       <tr className="border-t hover:bg-gray-50">
-        <td className="p-2">
+        {/* <td className="p-2">
           <button
             className="w-7 h-7 grid place-items-center border rounded hover:bg-gray-50"
             onClick={onToggle}
@@ -183,7 +183,7 @@ function AreaRow({ area, isOpen, onToggle, canEdit }) {
           >
             {isOpen ? "−" : "+"}
           </button>
-        </td>
+        </td> */}
         <td className="p-2 font-medium">{area.name}</td>
         <td className="p-2">
           <span className="font-semibold">{area.totalVoters ?? 0}</span>

@@ -24,7 +24,6 @@ export default function CommitteesPage() {
   const user = session?.user;
   const canView = true;
   const canAdd = has(user, "add_center");
-
   const canDelete = has(user, "delete_center");
 
   // ---------- filters ----------
@@ -32,6 +31,10 @@ export default function CommitteesPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+
+  // ✅ Committee type filter
+  const [types, setTypes] = useState([]);
+  const [typeId, setTypeId] = useState("");
 
   // City path
   const [cityCorps, setCityCorps] = useState([]);
@@ -53,16 +56,18 @@ export default function CommitteesPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // load top-level geos once
+  // load top-level geos once (+ committee types)
   useEffect(() => {
     (async () => {
       try {
-        const [cc, upa] = await Promise.all([
+        const [cc, upa, tt] = await Promise.all([
           fetchJSON("/api/geo?type=city_corporation&active=1"),
           fetchJSON("/api/geo?type=upazila&active=1"),
+          fetchJSON("/api/committee-types?active=1&limit=200"),
         ]);
         setCityCorps(cc.items || []);
         setUpazilas(upa.items || []);
+        setTypes(tt.items || []);
       } catch (e) {
         console.error(e);
       }
@@ -132,6 +137,10 @@ export default function CommitteesPage() {
   // build query for /api/committees
   const queryString = useMemo(() => {
     const base = { page, limit, q };
+
+    // ✅ include committee type filter
+    base.typeId = typeId || undefined;
+
     if (mode === "city") {
       base.cityId = cityId || undefined;
       base.wardId = cityWardId || undefined;
@@ -146,6 +155,7 @@ export default function CommitteesPage() {
     page,
     limit,
     q,
+    typeId,
     cityId,
     cityWardId,
     upazilaId,
@@ -181,12 +191,23 @@ export default function CommitteesPage() {
   useEffect(() => {
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, q, cityId, cityWardId, upazilaId, unionId, ruralWardId, limit]);
+  }, [
+    mode,
+    q,
+    typeId,
+    cityId,
+    cityWardId,
+    upazilaId,
+    unionId,
+    ruralWardId,
+    limit,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   function clearFilters() {
     setQ("");
+    setTypeId(""); // ✅
     setMode("city");
     setCityId("");
     setCityWardId("");
@@ -397,6 +418,26 @@ export default function CommitteesPage() {
             </div>
           </div>
         )}
+        {/* ✅ Committee type filter (new) */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Committee Type
+            </label>
+            <select
+              className="border rounded w-full px-3 py-2"
+              value={typeId}
+              onChange={(e) => setTypeId(e.target.value)}
+            >
+              <option value="">— Any —</option>
+              {types.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Error (if any) */}
@@ -414,7 +455,6 @@ export default function CommitteesPage() {
               <th className="text-left p-2">Committee Name</th>
               <th className="hidden md:block text-left p-2">Location</th>
               <th className="text-right p-2">Members</th>
-
               <th className="hidden md:block text-right p-2 w-[200px]">
                 Actions
               </th>
@@ -437,10 +477,7 @@ export default function CommitteesPage() {
             )}
             {!loading &&
               rows.map((r) => {
-                const peopleCount = r.peopleCount ?? r.personCount ?? 0; // adjust field name according to your API
-                const updatedAt = r.updatedAt
-                  ? new Date(r.updatedAt).toLocaleString()
-                  : "—";
+                const peopleCount = r.peopleCount ?? r.personCount ?? 0;
 
                 return (
                   <tr key={r._id} className="border-t hover:bg-gray-50">

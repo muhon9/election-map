@@ -82,7 +82,7 @@ async function saveLocalFilesFromFormData(form) {
     }
     if (size > MAX_BYTES) {
       throw new Error(
-        `File too large (max ${Math.round(MAX_BYTES / 1024 / 1024)} MB)`
+        `File too large (max ${Math.round(MAX_BYTES / 1024 / 1024)} MB)`,
       );
     }
 
@@ -122,7 +122,7 @@ export const GET = withPermApi(async (req) => {
   const page = Math.max(1, num(searchParams.get("page") || 1));
   const limit = Math.min(
     200,
-    Math.max(1, num(searchParams.get("limit") || 20))
+    Math.max(1, num(searchParams.get("limit") || 20)),
   );
   const sort = (searchParams.get("sort") || "createdAt").trim();
   const dir =
@@ -131,15 +131,22 @@ export const GET = withPermApi(async (req) => {
   // Filters
   const q = (searchParams.get("q") || "").trim();
   const cityId = oid(
-    searchParams.get("cityId") || searchParams.get("city_corporation")
+    searchParams.get("cityId") || searchParams.get("city_corporation"),
   );
   const areaId = oid(searchParams.get("areaId"));
   const upazilaId = oid(
-    searchParams.get("upazilaId") || searchParams.get("upazila")
+    searchParams.get("upazilaId") || searchParams.get("upazila"),
   );
   const unionId = oid(searchParams.get("unionId") || searchParams.get("union"));
   const wardId = oid(searchParams.get("wardId") || searchParams.get("ward"));
   const centerId = oid(searchParams.get("centerId"));
+
+  // ✅ Committee type filter (support multiple naming styles)
+  const typeId = oid(
+    searchParams.get("typeId") ||
+      searchParams.get("committeeTypeId") ||
+      searchParams.get("committeeType"),
+  );
 
   const match = {};
   const orConditions = [];
@@ -150,11 +157,14 @@ export const GET = withPermApi(async (req) => {
   if (wardId) match.wardId = wardId;
   if (q) match.$text = { $search: q };
 
+  // ✅ apply type filter (does NOT affect existing behavior when not provided)
+  if (typeId) match.typeId = typeId;
+
   // 🔹 Area filter: committees linked to this area (new areas[] or legacy areaId)
   if (areaId) {
     orConditions.push(
       { areas: areaId }, // new multi-area field
-      { areaId: areaId } // legacy single-area field
+      { areaId: areaId }, // legacy single-area field
     );
   }
 
@@ -167,7 +177,7 @@ export const GET = withPermApi(async (req) => {
       orConditions.push(
         { centers: centerId }, // directly attached to center
         { areas: { $in: areaIds } }, // any of its areas attached
-        { areaId: { $in: areaIds } } // legacy areaId pointing to those areas
+        { areaId: { $in: areaIds } }, // legacy areaId pointing to those areas
       );
     } else {
       // no areas for this center, fallback to only direct center match
@@ -192,7 +202,7 @@ export const GET = withPermApi(async (req) => {
     .populate({
       path: "areas",
       select: "name center",
-      populate: { path: "center", select: "name" }, // so you can get area.center.name
+      populate: { path: "center", select: "name" },
     })
     .lean();
 
@@ -314,7 +324,7 @@ export const POST = withPermApi(async (req) => {
       JSON.stringify({ error: e.message || "Invalid geo chain" }),
       {
         status: 400,
-      }
+      },
     );
   }
 

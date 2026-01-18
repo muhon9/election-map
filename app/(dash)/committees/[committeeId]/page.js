@@ -31,7 +31,7 @@ export default function CommitteeShowPage({ params }) {
         const [c, p] = await Promise.all([
           fetchJSON(`/api/committees/${committeeId}`),
           fetchJSON(
-            `/api/people?committeeId=${committeeId}&category=COMMITTEE&limit=500&sort=order&dir=asc`
+            `/api/people?committeeId=${committeeId}&category=COMMITTEE&limit=500&sort=order&dir=asc`,
           ),
         ]);
 
@@ -39,8 +39,8 @@ export default function CommitteeShowPage({ params }) {
         const items = Array.isArray(p?.items)
           ? p.items
           : Array.isArray(p)
-          ? p
-          : [];
+            ? p
+            : [];
         // Sort locally as safety: by order asc, importance desc, name
         items.sort((a, b) => {
           const ao = a.order ?? 0;
@@ -112,7 +112,9 @@ export default function CommitteeShowPage({ params }) {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{committee.name}</h1>
+          <h1 className="text-xl font-semibold">
+            {committee.name} - {committee.typeKey || "No Type"}
+          </h1>
         </div>
         <div className="flex items-center gap-3">
           <Link
