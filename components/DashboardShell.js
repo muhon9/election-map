@@ -20,6 +20,7 @@ export default function DashboardShell({ children, showAdmin }) {
     { href: "/", label: "Map Viewer" },
     { href: "/centers", label: "Centers" },
     { href: "/areas", label: "Areas" },
+    { href: "/area-map", label: "Areas Map" },
     { href: "/geo/list", label: "Ward / Union" },
     { href: "/committees", label: "Committees" },
     // ...(showAdmin ? [{ href: "/areas", label: "Areas" }] : []),
