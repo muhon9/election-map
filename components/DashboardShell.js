@@ -19,6 +19,7 @@ export default function DashboardShell({ children, showAdmin }) {
   const nav = [
     { href: "/", label: "Map Viewer" },
     { href: "/centers", label: "Centers" },
+    { href: "/agent-groups", label: "Agents" },
     { href: "/areas", label: "Areas" },
     { href: "/area-map", label: "Areas Map" },
     { href: "/geo/list", label: "Ward / Union" },

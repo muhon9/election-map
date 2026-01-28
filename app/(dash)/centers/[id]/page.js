@@ -68,7 +68,7 @@ export default function CenterDetailsPage() {
         setAreasErr("");
         const res = await fetch(
           `/api/centers/${center._id}/areas?page=1&limit=1000&sort=createdAt&dir=desc`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const j = await res.json();
         if (!alive) return;
@@ -138,6 +138,53 @@ export default function CenterDetailsPage() {
       alive = false;
     };
   }, [center?._id, areasLoading]); // areas won't change after first load
+
+  // --- NEW: Agent groups related to this center ---
+  const [agentGroups, setAgentGroups] = useState([]);
+  const [agentGroupsLoading, setAgentGroupsLoading] = useState(false);
+  const [agentGroupsErr, setAgentGroupsErr] = useState("");
+
+  useEffect(() => {
+    if (!center?._id) return;
+    let alive = true;
+
+    (async () => {
+      try {
+        setAgentGroupsLoading(true);
+        setAgentGroupsErr("");
+        setAgentGroups([]);
+
+        // assumes your agent-groups list api supports centerId filter
+        const res = await fetch(
+          `/api/agent-groups?centerId=${center._id}&limit=500&sort=createdAt&dir=desc`,
+          { cache: "no-store" },
+        );
+        const j = await res.json().catch(() => ({}));
+        if (!alive) return;
+
+        if (!res.ok) {
+          throw new Error(j?.error || "Failed to load agent groups");
+        }
+
+        const items = Array.isArray(j.items)
+          ? j.items
+          : Array.isArray(j)
+            ? j
+            : [];
+        setAgentGroups(items);
+      } catch (e) {
+        if (!alive) return;
+        setAgentGroups([]);
+        setAgentGroupsErr(e.message || "Failed to load agent groups");
+      } finally {
+        if (alive) setAgentGroupsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [center?._id]);
 
   // Derived stats
   const total = Number(center?.totalVoters ?? 0);
@@ -277,7 +324,6 @@ export default function CenterDetailsPage() {
             <StatCard title="Female" value={female} />
             <StatCard title="Areas" value={areasCount} />
           </section>
-
           {/* Stacked bar (Male vs Female) */}
           <section className="rounded border bg-white p-4">
             <h2 className="text-sm font-semibold mb-3">Voters breakdown</h2>
@@ -316,7 +362,6 @@ export default function CenterDetailsPage() {
               </div>
             </div>
           </section>
-
           {/* Quick facts */}
           <section className="rounded border bg-white p-4">
             <h2 className="text-sm font-semibold mb-3">Quick facts</h2>
@@ -358,6 +403,96 @@ export default function CenterDetailsPage() {
             </div>
           </section>
 
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Center Agents</h2>
+              {/* <a
+                href={`/agent-groups/new?centerId=${center._id}`}
+                className="text-sm text-blue-600 underline"
+              >
+                + New Agent Group
+              </a> */}
+            </div>
+
+            {agentGroupsLoading && (
+              <div className="rounded border bg-white p-3 text-sm text-gray-600">
+                Loading agent groups…
+              </div>
+            )}
+
+            {!agentGroupsLoading && agentGroupsErr && (
+              <div className="rounded border bg-white p-3 text-sm text-red-600">
+                {agentGroupsErr}
+              </div>
+            )}
+
+            {!agentGroupsLoading &&
+              !agentGroupsErr &&
+              (agentGroups.length === 0 ? (
+                <div className="rounded border bg-white p-3 text-sm text-gray-500">
+                  No agent groups linked to this center.
+                </div>
+              ) : (
+                <div className="rounded border bg-white overflow-x-auto">
+                  <table className="min-w-[700px] w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left p-2">Details</th>
+                        <th className="text-left p-2">Center</th>
+                        <th className="text-right p-2">Agents</th>
+                        <th className="text-left p-2">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agentGroups.map((g) => {
+                        const updatedAt = g.updatedAt
+                          ? new Date(g.updatedAt).toLocaleString()
+                          : "—";
+
+                        const centerObj =
+                          g.center && typeof g.center === "object"
+                            ? g.center
+                            : null;
+
+                        const peopleCount =
+                          typeof g.peopleCount === "number"
+                            ? g.peopleCount
+                            : "—";
+
+                        return (
+                          <tr key={g._id} className="border-t hover:bg-gray-50">
+                            <td className="p-2 font-medium">
+                              <a
+                                href={`/agent-groups/${g._id}`}
+                                className="text-blue-600 hover:underline"
+                              >
+                                {g.name || "Untitled"}
+                              </a>
+                            </td>
+                            <td className="p-2">
+                              {centerObj?.name ? (
+                                <a
+                                  href={`/centers/${centerObj._id}`}
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  {centerObj.name}
+                                </a>
+                              ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="p-2 text-right">{peopleCount}</td>
+                            <td className="p-2 text-xs text-gray-600">
+                              {updatedAt}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+          </section>
           {/* NEW: Related Committees */}
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">Related Committees</h2>
@@ -402,8 +537,8 @@ export default function CenterDetailsPage() {
                           ? c.centers.some(
                               (cid) =>
                                 String(
-                                  typeof cid === "object" ? cid._id : cid
-                                ) === String(center._id)
+                                  typeof cid === "object" ? cid._id : cid,
+                                ) === String(center._id),
                             )
                           : false;
 
@@ -469,7 +604,6 @@ export default function CenterDetailsPage() {
                 </div>
               ))}
           </section>
-
           {/* Areas & People */}
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">Areas & People</h2>
