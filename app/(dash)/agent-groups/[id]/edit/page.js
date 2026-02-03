@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { hasPerm } from "@/lib/rbac";
 import UploaderMini from "@/components/UploaderMini";
+import { set } from "mongoose";
 
 async function fetchJSON(url, opts = {}) {
   const r = await fetch(url, { cache: "no-store", ...opts });
@@ -29,6 +30,7 @@ export default function AgentGroupEditPage({ params }) {
 
   // -------- group edit fields --------
   const [name, setName] = useState("");
+  const [docLink, setDocLink] = useState("");
   const [notes, setNotes] = useState("");
   const [centerSearch, setCenterSearch] = useState("");
   const [centerOpts, setCenterOpts] = useState([]);
@@ -67,6 +69,7 @@ export default function AgentGroupEditPage({ params }) {
 
         setGroup(g);
         setName(g?.name || "");
+        setDocLink(g?.docLink || "");
         setNotes(g?.notes || "");
         setCenter(
           g?.center && typeof g.center === "object"
@@ -98,6 +101,7 @@ export default function AgentGroupEditPage({ params }) {
       name: (name || "").trim(),
       notes: notes || "",
       centerId: center?._id || null,
+      docLink: (docLink || "").trim(),
     };
 
     if (!payload.name) {
@@ -119,6 +123,7 @@ export default function AgentGroupEditPage({ params }) {
       if (updated) {
         setGroup(updated);
         setName(updated.name || "");
+        setDocLink(updated.docLink || "");
         setNotes(updated.notes || "");
         setCenter(
           updated?.center && typeof updated.center === "object"
@@ -510,7 +515,18 @@ export default function AgentGroupEditPage({ params }) {
             </div>
           </div>
         </div>
-
+        {/* Doc Link */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Document Link
+          </label>
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={docLink}
+            onChange={(e) => setDocLink(e.target.value)}
+            placeholder="https://example.com/document"
+          />
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Notes (optional)

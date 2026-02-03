@@ -22,6 +22,10 @@ const AgentGroupSchema = new Schema(
       type: String,
       default: "",
     },
+    docLink: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true },
 );

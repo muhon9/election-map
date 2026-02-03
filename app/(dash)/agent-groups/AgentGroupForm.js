@@ -19,6 +19,9 @@ export default function AgentGroupForm({ agentGroup = null, onSaved }) {
       : null,
   );
 
+  // doc link state
+  const [docLink, setDocLink] = useState(agentGroup?.docLink || "");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -71,6 +74,7 @@ export default function AgentGroupForm({ agentGroup = null, onSaved }) {
       const payload = {
         name: name.trim(),
         centerId: center._id,
+        docLink: docLink.trim(),
       };
 
       const url = agentGroup?._id
@@ -173,6 +177,19 @@ export default function AgentGroupForm({ agentGroup = null, onSaved }) {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Doc Link */}
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Document Link
+        </label>
+        <input
+          className="w-full border rounded px-3 py-2"
+          value={docLink}
+          onChange={(e) => setDocLink(e.target.value)}
+          placeholder="https://example.com/document"
+        />
       </div>
 
       {err && (

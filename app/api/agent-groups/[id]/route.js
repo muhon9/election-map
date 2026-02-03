@@ -53,6 +53,10 @@ export const PATCH = withPermApi(async (req, { params }) => {
     update.notes = body.notes;
   }
 
+  if (typeof body.docLink === "string") {
+    update.docLink = body.docLink.trim();
+  }
+
   // Allow centerId to be:
   // - undefined: do nothing
   // - null / "": clear

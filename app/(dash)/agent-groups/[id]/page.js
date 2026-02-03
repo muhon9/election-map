@@ -165,7 +165,22 @@ export default function AgentGroupShowPage({ params }) {
           </p>
         </div>
       </section>
-
+      {/* doc link */}
+      {group.docLink && (
+        <div className="border rounded bg-white p-3">
+          <h2 className="text-xs font-semibold text-gray-500 mb-1">
+            Document Link
+          </h2>
+          <a
+            href={group.docLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {group.docLink}
+          </a>
+        </div>
+      )}
       {/* Agents table */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -232,7 +247,7 @@ export default function AgentGroupShowPage({ params }) {
                           {a.name || "—"}
                         </Link>
                       </td>
-                      <td className="px-2 py-2 text-xs">{a.area || "—"}</td>
+                      <td className="px-2 py-2 text-xs">{a.areaName || "—"}</td>
 
                       <td className="px-2 py-2 text-xs font-mono">
                         {phone ? (

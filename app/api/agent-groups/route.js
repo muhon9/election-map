@@ -149,6 +149,7 @@ export const POST = withPermApi(async (req) => {
 
   const name = (body.name || "").trim();
   const centerId = oid(body.centerId);
+  const docLink = (body.docLink || "").trim();
   const notes = body.notes || "";
 
   if (!name) {
@@ -167,6 +168,7 @@ export const POST = withPermApi(async (req) => {
     name,
     center: centerId,
     notes,
+    docLink,
   });
 
   return Response.json({ ok: true, item: doc });

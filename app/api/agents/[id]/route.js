@@ -77,3 +77,17 @@ export const PATCH = withPermApi(async (req, { params }) => {
 
   return Response.json({ ok: true, item });
 }, "edit_center");
+
+// DELETE /api/agents/:id
+export const DELETE = withPermApi(async (req, { params }) => {
+  await dbConnect();
+
+  const id = oid(params.id);
+  if (!id) return Response.json({ error: "Invalid id" }, { status: 400 });
+
+  const item = await Agent.findByIdAndDelete(id).lean();
+
+  if (!item)
+    return Response.json({ error: "Agent not found" }, { status: 404 });
+  return Response.json({ ok: true });
+}, "delete_center");
